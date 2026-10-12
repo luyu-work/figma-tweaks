@@ -1,0 +1,11 @@
+/* Firefox web app windows (Taskbar Tabs) only, the regular browser is untouched.
+   Hides navigation, address bar and extension buttons, keeps window controls and the drag area. */
+:root[taskbartab] #nav-bar-customization-target > *,
+:root[taskbartab] #PanelUI-button,
+:root[taskbartab] #nav-bar-overflow-button,
+:root[taskbartab] #unified-extensions-button {
+  display: none !important;
+}
+:root[taskbartab] #nav-bar-customization-target {
+  -moz-window-dragging: drag !important;
+}

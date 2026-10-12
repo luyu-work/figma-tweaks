@@ -1,0 +1,102 @@
+/* ==UserStyle==
+@name        Figma Tweaks
+@namespace   local.figma-tweaks
+@version     1.0.0
+@description Personal Figma UI cleanup
+==/UserStyle== */
+@-moz-document domain("figma.com") {
+
+  :root {
+    --tw-new-btn-radius: 5px;      /* Design / FigJam / More buttons in Recents */
+    --tw-team-menu-pad: 0px;       /* team menu container padding */
+    --tw-team-menu-gap: 4px;       /* gap between teams */
+    --tw-team-item-h: 24px;        /* team row height */
+    --tw-new-btn-pad-left: 12px;   /* Design / FigJam / More, left padding */
+    --tw-new-btn-pad-right: 12px;  /* Design / FigJam / More, right padding */
+  }
+
+  /* Recents: remove Slides and Make */
+  [data-testid="new-slides-file-button"],
+  [data-testid="new-figmake-file-button"] {
+    display: none !important;
+  }
+
+  /* Recents: Design / FigJam / More rectangular like "+ Folder" */
+  [data-testid="new-design-file-button"],
+  [data-testid="new-whiteboard-file-button"],
+  [data-testid="new-file-creation-more-button"] {
+    border-radius: var(--tw-new-btn-radius) !important;
+  }
+  [data-testid="new-design-file-button"] > div > div:first-child > div,
+  [data-testid="new-whiteboard-file-button"] > div > div:first-child > div,
+  [data-testid="new-file-creation-more-button"] > div > div:first-child > div {
+    padding-left: var(--tw-new-btn-pad-left) !important;
+    padding-right: var(--tw-new-btn-pad-right) !important;
+  }
+
+  /* More menu: keep only Import */
+  [role="menu"] > ul:has([data-testid="new-cooper-file-button"]),
+  [data-testid="new-cooper-file-button"],
+  [data-testid="new-sites-file-button"] {
+    display: none !important;
+  }
+
+  /* Team menu: more air. The account menu also has avatar radios, it is excluded by its
+     several consecutive menu items (Change theme, Settings...), the team menu has only "Create new". */
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) {
+    padding: var(--tw-team-menu-pad) !important;
+  }
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) > ul[role="group"],
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) > ul[role="group"] > ul {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--tw-team-menu-gap) !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) li,
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) li > span {
+    height: var(--tw-team-item-h) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex-shrink: 0 !important;
+  }
+  [role="menu"]:has([role="menuitemradio"] [data-testid="image-avatar"]):not(:has([role="menuitem"] + [role="menuitem"])) li > span {
+    padding: 0 8px 0 4px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Team menu and sidebar: remove "Free" badges */
+  [role="menu"] [role="menuitemradio"] span:has(> strong),
+  button[aria-label^="Change plan"] {
+    display: none !important;
+  }
+
+  /* Editor: remove "Free" badge next to the file name (class hash changes, match the prefix) */
+  [class*="paid_status_badge_base--container"],
+  div:has(> button[data-onboarding-key="file_paid_status_badge_onboarding_key"]) {
+    display: none !important;
+  }
+
+  /* Folder page: remove Create button */
+  div:has(> [data-testid="folder-page-omnicreate-dropdown"]),
+  [data-testid="folder-page-omnicreate-dropdown"] {
+    display: none !important;
+  }
+
+  /* Sidebar: remove Upgrade */
+  [data-testid="uub-experiment-upgrade-button"] {
+    display: none !important;
+  }
+
+  /* Editor: remove Draw / Design / Motion / Dev switcher and its divider */
+  div:has(> fieldset [data-toolbelt-mode]),
+  div:has(+ div > fieldset [data-toolbelt-mode]) {
+    display: none !important;
+  }
+
+  /* Editor: remove Agents (AI) from the left rail */
+  [data-testid="left-panel-assistant-left-rail"] {
+    display: none !important;
+  }
+}
