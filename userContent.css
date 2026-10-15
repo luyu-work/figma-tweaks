@@ -95,6 +95,11 @@
     display: none !important;
   }
 
+  /* Editor: remove the arrow circle next to own avatar in the header (avatar and other people stay, class hash changes, match the prefix) */
+  button[class*="multiplayer_view--selfAvatarWithToolsContainer"] [class*="multiplayer_view--onboardingTarget"] {
+    display: none !important;
+  }
+
   /* Editor: remove Agents (AI) from the left rail */
   [data-testid="left-panel-assistant-left-rail"] {
     display: none !important;
