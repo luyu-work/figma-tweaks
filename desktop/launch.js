@@ -51,6 +51,24 @@ const PAGE_FN = `window.__figmaTweaks = function (css) {
     if (s.textContent !== window.__figmaTweaksCss) s.textContent = window.__figmaTweaksCss;
   };
   put();
+  // "More" is restyled as "Import" in the CSS: after its click, press Import in the (invisible) menu.
+  if (!window.__figmaTweaksImport) {
+    window.__figmaTweaksImport = true;
+    // Figma opens the menu on pointerdown and its overlay then takes the click, so listen to pointerdown (and click for the keyboard).
+    var busy = false;
+    var onMore = function (e) {
+      if (busy || !e.target.closest || !e.target.closest('[data-testid="new-file-creation-more-button"]')) return;
+      busy = true;
+      var tries = 0;
+      var t = setInterval(function () {
+        var item = document.querySelector('[data-testid="file-import-button"]');
+        if (item) { clearInterval(t); item.click(); busy = false; }
+        else if (++tries > 40) { clearInterval(t); busy = false; }
+      }, 25);
+    };
+    document.addEventListener('pointerdown', onMore, true);
+    document.addEventListener('click', onMore, true);
+  }
   if (!window.__figmaTweaksTimer) window.__figmaTweaksTimer = setInterval(put, 1000);
 };`;
 
