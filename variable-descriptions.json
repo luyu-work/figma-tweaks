@@ -1,0 +1,152 @@
+{
+  "base/--background": {
+    "description": "Фон страницы",
+    "light": "#FAFAFA",
+    "dark": "#101014"
+  },
+  "base/--foreground": {
+    "description": "Основной текст и иконки",
+    "light": "#09090B",
+    "dark": "#FFFFFF"
+  },
+  "base/--card": {
+    "description": "Фон карточек и панелей",
+    "light": "#FFFFFF",
+    "dark": "#09090B"
+  },
+  "base/--card-foreground": {
+    "description": "Текст на карточках",
+    "light": "#09090B",
+    "dark": "#FFFFFF"
+  },
+  "base/--popover": {
+    "description": "Фон выпадающих списков и модалок",
+    "light": "#FFFFFF",
+    "dark": "#09090B"
+  },
+  "base/--popover-foreground": {
+    "description": "Текст в выпадающих списках и модалках",
+    "light": "#09090B",
+    "dark": "#FFFFFF"
+  },
+  "base/--secondary": {
+    "description": "Фон вторичных кнопок и тегов",
+    "light": "#EDEDED",
+    "dark": "#101014"
+  },
+  "base/--secondary-foreground": {
+    "description": "Текст на вторичных элементах",
+    "light": "#999999",
+    "dark": "#999999"
+  },
+  "base/--muted": {
+    "description": "Приглушённый фон блоков",
+    "light": "#FAFAFA",
+    "dark": "#101014"
+  },
+  "base/--muted-foreground": {
+    "description": "Подписи, плейсхолдеры, вторичный текст",
+    "light": "#999999",
+    "dark": "#999999"
+  },
+  "accent/--primary": {
+    "description": "Главные кнопки и ключевые действия",
+    "light": "#00C2E0",
+    "dark": "#00C2E0"
+  },
+  "accent/--primary-foreground": {
+    "description": "Текст и иконки на primary",
+    "light": "#09090B",
+    "dark": "#09090B"
+  },
+  "accent/--accent": {
+    "description": "Акцентные элементы, ховеры",
+    "light": "#00B1CC",
+    "dark": "#00B1CC"
+  },
+  "accent/--accent-foreground": {
+    "description": "Текст и иконки на accent",
+    "light": "#FAFAFA",
+    "dark": "#00B1CC"
+  },
+  "accent/--accent-muted": {
+    "description": "Мягкая подложка акцентных блоков",
+    "light": "#E5FCFF",
+    "dark": "#0F2224"
+  },
+  "accent/--accent-landing": {
+    "description": "Акцентный фон лендинга",
+    "light": "#223234",
+    "dark": "#223234"
+  },
+  "status/--success": {
+    "description": "Успех, подтверждение",
+    "light": "#00B286",
+    "dark": "#00B286"
+  },
+  "status/--success-foreground": {
+    "description": "Текст и фон плашек успеха",
+    "light": "#E7F8F3",
+    "dark": "#0A1F18"
+  },
+  "status/--destructive": {
+    "description": "Ошибки, удаление, опасные действия",
+    "light": "#EF4343",
+    "dark": "#E45353"
+  },
+  "status/--destructive-foreground": {
+    "description": "Текст и фон плашек ошибки",
+    "light": "#FEECEC",
+    "dark": "#300D0D"
+  },
+  "status/--info": {
+    "description": "Информационный фон",
+    "light": "#F0F9FF",
+    "dark": "#F0F9FF"
+  },
+  "status/--info-foreground": {
+    "description": "Информационный текст и ссылки",
+    "light": "#0066FF",
+    "dark": "#0066FF"
+  },
+  "border/--border": {
+    "description": "Границы карточек и разделители",
+    "light": "#EDEDED",
+    "dark": "#1D1F26"
+  },
+  "border/--input": {
+    "description": "Границы полей ввода",
+    "light": "#EDEDED",
+    "dark": "#1D1F26"
+  },
+  "border/--ring": {
+    "description": "Обводка фокуса",
+    "light": "#00C2E0",
+    "dark": "#00C2E0"
+  },
+  "charts/--chart-1": {
+    "description": "Серия данных 1",
+    "light": "#E76E50",
+    "dark": "#2662D9"
+  },
+  "charts/--chart-2": {
+    "description": "Серия данных 2",
+    "light": "#2A9D90",
+    "dark": "#2EB88A"
+  },
+  "charts/--chart-3": {
+    "description": "Серия данных 3",
+    "light": "#274754",
+    "dark": "#E88C30"
+  },
+  "charts/--chart-4": {
+    "description": "Серия данных 4",
+    "light": "#E8C468",
+    "dark": "#AF57DB"
+  },
+  "charts/--chart-5": {
+    "description": "Серия данных 5",
+    "light": "#F4A462",
+    "dark": "#E23670"
+  }
+}
