@@ -98,12 +98,11 @@ function send(method, params = {}, sessionId, cb) {
   try { toFigma.write(JSON.stringify(msg) + '\0'); } catch (e) { log('send error', e.message); }
 }
 
-// Variable description tooltips: ../variable-tooltips.js (a function expression) called with ../variable-descriptions.json.
+// Variable tooltips: ../variable-tooltips.js (a function expression), reads its data from Figma's own page state.
 function tooltipsScript() {
   try {
     const fn = fs.readFileSync(path.join(__dirname, '..', 'variable-tooltips.js'), 'utf8').trim();
-    const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'variable-descriptions.json'), 'utf8'));
-    return `\n(${fn})(${JSON.stringify(data)});`;
+    return `\n(${fn})();`;
   } catch (e) { log('tooltips read error', e.message); return ''; }
 }
 
@@ -166,7 +165,7 @@ send('Target.setDiscoverTargets', { discover: true });
 // Live reload on save.
 let timer = null;
 fs.watch(path.dirname(CSS_FILE), (_e, file) => {
-  if (![path.basename(CSS_FILE), 'variable-tooltips.js', 'variable-descriptions.json'].includes(file)) return;
+  if (![path.basename(CSS_FILE), 'variable-tooltips.js'].includes(file)) return;
   clearTimeout(timer);
   timer = setTimeout(() => {
     const css = readCss();
