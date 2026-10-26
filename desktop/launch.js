@@ -87,6 +87,8 @@ const child = spawn(exe, ['--remote-debugging-pipe', ...process.argv.slice(2)], 
 const toFigma = child.stdio[3];
 const fromFigma = child.stdio[4];
 log('started', exe);
+const guard = require('./guard');
+guard.watchUpdate(log);
 
 let nextId = 1;
 const sessions = new Set();
@@ -222,4 +224,11 @@ fs.watch(path.dirname(CSS_FILE), (_e, file) => {
 
 fromFigma.on('error', (e) => log('pipe error', e.message));
 toFigma.on('error', (e) => log('pipe error', e.message));
-child.on('exit', (code) => { log('figma exited', code); process.exit(0); });
+child.on('exit', (code) => {
+  log('figma exited', code);
+  // A new app-* folder means Figma updated itself and Squirrel restarts it without the tweaks.
+  let updated = false;
+  try { updated = latestExe() !== exe; } catch {}
+  if (updated) guard.relaunchAfterExit(log, () => process.exit(0));
+  else process.exit(0);
+});
