@@ -120,21 +120,22 @@ function scriptFor(css) {
 
 // Self-update. When files changed, show the modal in the first visible Figma page (retry until one takes it).
 let updatedVersion = null;
+let modalRound = 0;
 function showUpdateModal() {
   if (!updatedVersion) return;
-  const ids = [...sessions];
-  let i = 0;
-  const next = () => {
-    if (!updatedVersion || i >= ids.length) return;
+  const mode = modalRound < 3 ? 'visible' : modalRound < 6 ? 'focus' : 'any'; // fall back if no page reports itself visible
+  modalRound++;
+  // All pages at once: a hidden page may never answer, it must not block the visible one.
+  for (const sid of sessions) {
     send('Runtime.evaluate', {
-      expression: `window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}) : false`,
+      expression: `JSON.stringify([window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}, ${JSON.stringify(mode)}) : 'nofn', document.visibilityState, document.hasFocus(), location.pathname.slice(0, 30)])`,
       returnByValue: true,
-    }, ids[i++], (r) => {
-      if (r && r.result && r.result.value === true) updatedVersion = null;
-      else next();
+    }, sid, (r) => {
+      let v = [];
+      try { v = JSON.parse(r.result.value); } catch {}
+      if (v[0] === true) { updatedVersion = null; log('update modal shown', mode, v[3]); }
     });
-  };
-  next();
+  }
 }
 setInterval(showUpdateModal, 3000);
 require('./update')(log, (version) => { updatedVersion = version; showUpdateModal(); });
@@ -143,7 +144,8 @@ require('./update')(log, (version) => { updatedVersion = version; showUpdateModa
 function restartFigma() {
   const lnk = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Figma.lnk').replace(/'/g, "''");
   const ps = `$n=0; while ((Get-Process Figma -ErrorAction SilentlyContinue) -and $n -lt 60) { Start-Sleep -Milliseconds 500; $n++ }; Start-Process '${lnk}'`;
-  spawn('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  // Through `cmd /c start /b`: a plain detached powershell child dies together with this process.
+  spawn('cmd', ['/c', 'start', '', '/b', 'powershell', '-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   execFileSync('taskkill', ['/IM', 'Figma.exe'], { stdio: 'ignore' });
 }
 
