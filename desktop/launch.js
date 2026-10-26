@@ -87,6 +87,7 @@ const child = spawn(exe, ['--remote-debugging-pipe', ...process.argv.slice(2)], 
 const toFigma = child.stdio[3];
 const fromFigma = child.stdio[4];
 log('started', exe);
+require('./update')(log);
 
 let nextId = 1;
 const sessions = new Set();
