@@ -3,8 +3,12 @@
 // "Позже" just closes it, the update is already on disk and applies on the next start.
 // Returns true when the modal was shown, false when this page is not visible (the launcher then tries another one).
 (function () {
-  window.__figmaTweaksShowUpdate = function (version) {
-    if (document.visibilityState !== 'visible') return false;
+  // mode "visible": the page is on screen. "focus": it has keyboard focus. "any": any file page.
+  window.__figmaTweaksShowUpdate = function (version, mode) {
+    var ok = mode === 'any' ? /^\/(design|file|board|slides|make)\//.test(location.pathname)
+      : mode === 'focus' ? document.hasFocus()
+      : document.visibilityState === 'visible';
+    if (!ok) return false;
     if (document.getElementById('figma-tweaks-update')) return true;
 
     var host = document.createElement('div');
