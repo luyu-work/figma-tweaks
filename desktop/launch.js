@@ -87,7 +87,6 @@ const child = spawn(exe, ['--remote-debugging-pipe', ...process.argv.slice(2)], 
 const toFigma = child.stdio[3];
 const fromFigma = child.stdio[4];
 log('started', exe);
-require('./update')(log);
 
 let nextId = 1;
 const sessions = new Set();
@@ -107,8 +106,45 @@ function tooltipsScript() {
   } catch (e) { log('tooltips read error', e.message); return ''; }
 }
 
+// Update modal: ../update-modal.js defines window.__figmaTweaksShowUpdate(version).
+function modalScript() {
+  try {
+    const fn = fs.readFileSync(path.join(__dirname, '..', 'update-modal.js'), 'utf8').trim();
+    return `\n(${fn})();`;
+  } catch (e) { log('modal read error', e.message); return ''; }
+}
+
 function scriptFor(css) {
-  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});${tooltipsScript()}`;
+  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});${tooltipsScript()}${modalScript()}`;
+}
+
+// Self-update. When files changed, show the modal in the first visible Figma page (retry until one takes it).
+let updatedVersion = null;
+function showUpdateModal() {
+  if (!updatedVersion) return;
+  const ids = [...sessions];
+  let i = 0;
+  const next = () => {
+    if (!updatedVersion || i >= ids.length) return;
+    send('Runtime.evaluate', {
+      expression: `window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}) : false`,
+      returnByValue: true,
+    }, ids[i++], (r) => {
+      if (r && r.result && r.result.value === true) updatedVersion = null;
+      else next();
+    });
+  };
+  next();
+}
+setInterval(showUpdateModal, 3000);
+require('./update')(log, (version) => { updatedVersion = version; showUpdateModal(); });
+
+// "Перезапустить" in the modal: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
+function restartFigma() {
+  const lnk = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Figma.lnk').replace(/'/g, "''");
+  const ps = `$n=0; while ((Get-Process Figma -ErrorAction SilentlyContinue) -and $n -lt 60) { Start-Sleep -Milliseconds 500; $n++ }; Start-Process '${lnk}'`;
+  spawn('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  execFileSync('taskkill', ['/IM', 'Figma.exe'], { stdio: 'ignore' });
 }
 
 // Keeps a single on-new-document script per page, replaced on every CSS change.
@@ -124,6 +160,8 @@ function setNewDocScript(sessionId, src) {
 function inject(sessionId) {
   const src = scriptFor(readCss());
   send('Page.enable', {}, sessionId);
+  send('Runtime.enable', {}, sessionId);
+  send('Runtime.addBinding', { name: 'figmaTweaksAction' }, sessionId);
   setNewDocScript(sessionId, src);
   send('Runtime.evaluate', { expression: src }, sessionId, (r) => {
     if (r && r.exceptionDetails) log('inject error', JSON.stringify(r.exceptionDetails).slice(0, 300));
@@ -154,6 +192,8 @@ fromFigma.on('data', (chunk) => {
     } else if ((msg.method === 'Page.domContentEventFired' || msg.method === 'Page.frameNavigated') && msg.sessionId) {
       // Backup for pages where the on-new-document script did not run.
       send('Runtime.evaluate', { expression: scriptFor(readCss()) }, msg.sessionId);
+    } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction') {
+      if (msg.params.payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
     } else if (msg.method === 'Target.detachedFromTarget') {
       sessions.delete(msg.params.sessionId);
       scriptIds.delete(msg.params.sessionId);
@@ -166,7 +206,7 @@ send('Target.setDiscoverTargets', { discover: true });
 // Live reload on save.
 let timer = null;
 fs.watch(path.dirname(CSS_FILE), (_e, file) => {
-  if (![path.basename(CSS_FILE), 'variable-tooltips.js'].includes(file)) return;
+  if (![path.basename(CSS_FILE), 'variable-tooltips.js', 'update-modal.js'].includes(file)) return;
   clearTimeout(timer);
   timer = setTimeout(() => {
     const css = readCss();
