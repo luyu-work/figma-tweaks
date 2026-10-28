@@ -142,47 +142,6 @@ function showUpdateModal() {
 setInterval(showUpdateModal, 3000);
 require('./update')(log, (version) => { updatedVersion = version; showUpdateModal(); });
 
-// Text style details (font weight, letter spacing). Figma's page only has the size and line height of a style, so the
-// launcher asks the Figma REST API for the style's node. Needs a personal access token (File content: read) in the
-// FIGMA_TOKEN env var or in ../.figma-token. Works for any file or library the token's owner can open.
-const styleCache = new Map(); // style key -> { weight, spacing }
-const WEIGHTS = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
-function figmaToken() {
-  if (process.env.FIGMA_TOKEN) return process.env.FIGMA_TOKEN.trim();
-  for (const name of ['.figma-token', '.figma-token.txt']) {
-    try { return fs.readFileSync(path.join(__dirname, '..', name), 'utf8').trim(); } catch {}
-  }
-  return '';
-}
-async function fetchStyleInfo(p) {
-  if (styleCache.has(p.key)) return styleCache.get(p.key);
-  const token = figmaToken();
-  if (!token) return null;
-  const res = await fetch(`https://api.figma.com/v1/files/${encodeURIComponent(p.file)}/nodes?ids=${encodeURIComponent(p.node)}`, {
-    headers: { 'X-Figma-Token': token },
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) { log('style api', res.status); return null; }
-  const node = (await res.json()).nodes?.[p.node]?.document;
-  const st = node && node.style;
-  if (!st) return null;
-  // Name of the weight: the font's style, else from the PostScript name (Inter-SemiBold), else the nearest standard weight (variable fonts give 510).
-  const ps = String(st.fontPostScriptName || '').split('-')[1];
-  const weight = st.fontStyle || (ps && ps.replace(/([a-z])([A-Z])/g, '$1 $2')) ||
-    (WEIGHTS[Math.min(900, Math.max(100, Math.round((st.fontWeight || 400) / 100) * 100))] + (st.italic ? ' Italic' : ''));
-  const pct = st.fontSize ? Math.round(((st.letterSpacing || 0) / st.fontSize) * 1000) / 10 : 0;
-  const info = { weight, spacing: `${pct}%` };
-  styleCache.set(p.key, info);
-  return info;
-}
-function replyStyle(sessionId, payload) {
-  let p;
-  try { p = JSON.parse(payload); } catch { return; }
-  fetchStyleInfo(p)
-    .catch((e) => { log('style error', e.message); return null; })
-    .then((info) => send('Runtime.evaluate', { expression: `window.__figmaTweaksStyle && window.__figmaTweaksStyle(${JSON.stringify(p.key)}, ${JSON.stringify(info)})` }, sessionId));
-}
-
 // "Перезапустить" in the modal: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
 function restartFigma() {
   const lnk = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Figma.lnk').replace(/'/g, "''");
@@ -238,8 +197,7 @@ fromFigma.on('data', (chunk) => {
       // Backup for pages where the on-new-document script did not run.
       send('Runtime.evaluate', { expression: scriptFor(readCss()) }, msg.sessionId);
     } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction') {
-      if (msg.params.payload.startsWith('style:')) replyStyle(msg.sessionId, msg.params.payload.slice(6));
-      else if (msg.params.payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
+      if (msg.params.payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
     } else if (msg.method === 'Target.detachedFromTarget') {
       sessions.delete(msg.params.sessionId);
       scriptIds.delete(msg.params.sessionId);
