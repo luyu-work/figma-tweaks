@@ -75,13 +75,18 @@
     return null;
   }
 
-  state.styles = {}; // style key -> { weight, spacing } or false (not available)
+  state.styles = {}; // style key -> { weight, spacing }
+  state.asked = {};  // style key -> time of the last request, a failed one is retried after 30 s
   function styleMeta(key) {
     var s = state.styles[key];
-    return s ? s.weight + ' · ' + s.spacing : null;
+    if (!s) return null;
+    // A number instead of a name (variable font) becomes the nearest standard weight name.
+    var names = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
+    var w = /^\d+$/.test(s.weight) ? names[Math.min(900, Math.max(100, Math.round(s.weight / 100) * 100))] : s.weight;
+    return w + ' · ' + s.spacing;
   }
   window.__figmaTweaksStyle = function (key, info) {
-    state.styles[key] = info || false;
+    if (info) state.styles[key] = info;
     if (currentInfo && currentInfo.styleKey === key) {
       currentInfo.hex = styleMeta(key);
       if (currentInfo.shown) show(currentInfo);
@@ -114,8 +119,8 @@
     var meta = null, key = null;
     if (ds) {
       key = ds.key;
-      if (state.styles[key] === undefined && window.figmaTweaksAction) {
-        state.styles[key] = false; // one request per style
+      if (!state.styles[key] && window.figmaTweaksAction && !(state.asked[key] > Date.now() - 30000)) {
+        state.asked[key] = Date.now();
         window.figmaTweaksAction('style:' + JSON.stringify({ key: key, file: ds.file_key, node: ds.node_id }));
       }
       meta = styleMeta(key);
