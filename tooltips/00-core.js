@@ -5,7 +5,7 @@
 // Font weight and letter spacing of a style are read from Figma itself, see "Font weight and letter spacing" below.
 // This file and the numbered files next to it are one function body: desktop/launch.js joins them in name order.
   // Re-injection (live reload) replaces the previous instance.
-  if (window.__figmaTweaksTips) window.__figmaTweaksTips.dispose();
+  if (window.__figmaTweaksTips && window.__figmaTweaksTips.dispose) window.__figmaTweaksTips.dispose();
   var state = window.__figmaTweaksTips = {};
 
   function fiberOf(el) {
