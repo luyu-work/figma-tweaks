@@ -100,11 +100,13 @@ function send(method, params = {}, sessionId, cb) {
   try { toFigma.write(JSON.stringify(msg) + '\0'); } catch (e) { log('send error', e.message); }
 }
 
-// Variable tooltips: ../variable-tooltips.js (a function expression), reads its data from Figma's own page state.
+// Tooltips: the numbered files in ../tooltips are joined in name order into one function, it reads its data from Figma's own page state.
+const TOOLTIPS_DIR = path.join(__dirname, '..', 'tooltips');
 function tooltipsScript() {
   try {
-    const fn = fs.readFileSync(path.join(__dirname, '..', 'variable-tooltips.js'), 'utf8').trim();
-    return `\n(${fn})();`;
+    const body = fs.readdirSync(TOOLTIPS_DIR).filter((f) => f.endsWith('.js')).sort()
+      .map((f) => fs.readFileSync(path.join(TOOLTIPS_DIR, f), 'utf8')).join('\n');
+    return `\n(function () {\n${body}\n})();`;
   } catch (e) { log('tooltips read error', e.message); return ''; }
 }
 
@@ -209,8 +211,7 @@ send('Target.setDiscoverTargets', { discover: true });
 
 // Live reload on save.
 let timer = null;
-fs.watch(path.dirname(CSS_FILE), (_e, file) => {
-  if (![path.basename(CSS_FILE), 'variable-tooltips.js', 'update-modal.js'].includes(file)) return;
+function reload() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     const css = readCss();
@@ -220,7 +221,11 @@ fs.watch(path.dirname(CSS_FILE), (_e, file) => {
     }
     log('reloaded css');
   }, 150);
+}
+fs.watch(path.dirname(CSS_FILE), (_e, file) => {
+  if ([path.basename(CSS_FILE), 'update-modal.js'].includes(file)) reload();
 });
+try { fs.watch(TOOLTIPS_DIR, reload); } catch (e) { log('watch error', e.message); }
 
 fromFigma.on('error', (e) => log('pipe error', e.message));
 toFigma.on('error', (e) => log('pipe error', e.message));
