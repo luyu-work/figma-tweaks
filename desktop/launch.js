@@ -149,7 +149,10 @@ const styleCache = new Map(); // style key -> { weight, spacing }
 const WEIGHTS = { 100: 'Thin', 200: 'Extra Light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semi Bold', 700: 'Bold', 800: 'Extra Bold', 900: 'Black' };
 function figmaToken() {
   if (process.env.FIGMA_TOKEN) return process.env.FIGMA_TOKEN.trim();
-  try { return fs.readFileSync(path.join(__dirname, '..', '.figma-token'), 'utf8').trim(); } catch { return ''; }
+  for (const name of ['.figma-token', '.figma-token.txt']) {
+    try { return fs.readFileSync(path.join(__dirname, '..', name), 'utf8').trim(); } catch {}
+  }
+  return '';
 }
 async function fetchStyleInfo(p) {
   if (styleCache.has(p.key)) return styleCache.get(p.key);
@@ -163,7 +166,10 @@ async function fetchStyleInfo(p) {
   const node = (await res.json()).nodes?.[p.node]?.document;
   const st = node && node.style;
   if (!st) return null;
-  const weight = (WEIGHTS[st.fontWeight] || String(st.fontWeight)) + (st.italic ? ' Italic' : '');
+  // Name of the weight: the font's style, else from the PostScript name (Inter-SemiBold), else the nearest standard weight (variable fonts give 510).
+  const ps = String(st.fontPostScriptName || '').split('-')[1];
+  const weight = st.fontStyle || (ps && ps.replace(/([a-z])([A-Z])/g, '$1 $2')) ||
+    (WEIGHTS[Math.min(900, Math.max(100, Math.round((st.fontWeight || 400) / 100) * 100))] + (st.italic ? ' Italic' : ''));
   const pct = st.fontSize ? Math.round(((st.letterSpacing || 0) / st.fontSize) * 1000) / 10 : 0;
   const info = { weight, spacing: `${pct}%` };
   styleCache.set(p.key, info);
