@@ -5,8 +5,9 @@
     var info = resolve(el);
     if (!info) { hide(); return; }
     if (info.el === current) return;
+    var warm = Date.now() - (state.lastHide || 0) < 500 || (tip && tip.style.display === 'block');
     hide(); current = info.el; currentInfo = info;
-    timer = setTimeout(function () { if (current === info.el) show(info); }, 350);
+    timer = setTimeout(function () { if (current === info.el) show(info); }, warm ? 30 : 250);
   }
   // Opening the style picker or selecting a text with a library style starts loading that library right away.
   var watchTimer = null;
@@ -14,18 +15,20 @@
     if (watchTimer) return;
     watchTimer = setTimeout(function () {
       watchTimer = null;
-      var els = [].slice.call(document.querySelectorAll('[role="rowheader"]')).slice(0, 40);
+      sceneGraph();
+      var els = [].slice.call(document.querySelectorAll('[role="rowheader"], [role="treeitem"]')).slice(0, 40);
       var chip = document.querySelector('button[class*="style_title"]');
       if (chip) els.push(chip);
-      els.forEach(function (e) { var ds = dsStyleOf(e); if (ds && !ds.isLocal) prefetchLibrary(ds.library_key); });
+      els.forEach(function (e) { var ds = dsStyleOf(e); if (ds) prefetchLibrary(ds.library_key); });
     }, 400);
   });
-  watcher.observe(document.documentElement, { childList: true, subtree: true });
+  watcher.observe(document, { childList: true, subtree: true });
   document.addEventListener('pointerover', onOver, true);
   document.addEventListener('mousedown', hide, true);
   document.addEventListener('scroll', hide, true);
   state.dispose = function () {
     hide();
+    clearTimeout(state.preloadTimer);
     watcher.disconnect();
     document.removeEventListener('pointerover', onOver, true);
     document.removeEventListener('mousedown', hide, true);

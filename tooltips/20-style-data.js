@@ -19,20 +19,34 @@
   }
 
   // A style of the open file is a node of Figma's live scene graph: its font and letter spacing are read straight from
-  // it, no network and no popups. The scene graph object is passed around in the props of several React components.
+  // it, no network. Figma keeps the scene graph in its redux store (mirror.sceneGraph), it is there with nothing
+  // selected too. If that ever changes, it is searched for in the props of the React components (they only carry it
+  // while the properties panel is mounted). A miss is remembered for 3 s.
   function sceneGraph() {
+    try {
+      var m = window._fullscreen_._store.getState().mirror;
+      if (m && m.sceneGraph && typeof m.sceneGraph.get === 'function') return m.sceneGraph;
+    } catch (e) {}
     if (state.sg) return state.sg;
-    var el = document.querySelector('button') || document.body, f = fiberOf(el);
-    if (!f) return null;
-    while (f.return) f = f.return;
-    var stack = [f], budget = 150000;
-    while (stack.length && budget-- > 0) {
-      var n = stack.pop();
-      if (n.sibling) stack.push(n.sibling);
-      if (n.child) stack.push(n.child);
-      var p = n.memoizedProps;
-      if (p && typeof p === 'object' && p.sceneGraph && typeof p.sceneGraph.get === 'function') return (state.sg = p.sceneGraph);
+    if (state.sgMiss > Date.now() - 3000) return null;
+    var roots = [], els = [].slice.call(document.querySelectorAll('button')).slice(0, 60).concat(document.body || []);
+    els.forEach(function (el) {
+      var f = fiberOf(el);
+      if (!f) return;
+      while (f.return) f = f.return;
+      [f, f.alternate, f.stateNode && f.stateNode.current].forEach(function (c) { if (c && roots.indexOf(c) < 0) roots.push(c); });
+    });
+    for (var r = 0; r < roots.length; r++) {
+      var stack = [roots[r]], budget = 150000;
+      while (stack.length && budget-- > 0) {
+        var n = stack.pop();
+        if (n.sibling) stack.push(n.sibling);
+        if (n.child) stack.push(n.child);
+        var p = n.memoizedProps;
+        if (p && typeof p === 'object' && p.sceneGraph && typeof p.sceneGraph.get === 'function') return (state.sg = p.sceneGraph);
+      }
     }
+    state.sgMiss = Date.now();
     return null;
   }
 
@@ -47,6 +61,7 @@
     if (!sg) return null;
     try {
       var n = sg.get(ds.node_id);
+      if (!n) state.sg = null; // the scene graph was replaced (another file), find it again next time
       if (!n || n.type !== 'TEXT' || !n.fontName) return null;
       return { weight: n.fontName.style, spacing: spacingPercent(n.letterSpacing, n.fontSize) };
     } catch (e) { state.sg = null; return null; }
@@ -72,7 +87,7 @@
   }
   function recall(ds) { var e = saved[ds.key]; return e && e.h === ds.content_hash ? { weight: e.w, spacing: e.s } : null; }
 
-  // Downloads run four at a time, a hovered style goes first.
+  // Background downloads run four at a time. A hovered style is not queued, it starts at once.
   var active = 0, waiting = [];
   function pump() {
     while (active < 4 && waiting.length) {
@@ -86,8 +101,8 @@
     var hit = recall(ds);
     if (hit) return Promise.resolve(hit);
     return new Promise(function (resolve) {
-      var job = { fn: function () { return loadStyle(ds); }, resolve: resolve };
-      if (urgent) waiting.unshift(job); else waiting.push(job);
+      if (urgent) return loadStyle(ds).then(resolve);
+      waiting.push({ fn: function () { return loadStyle(ds); }, resolve: resolve });
       pump();
     }).then(function (info) { if (info) remember(ds, info); return info; });
   }
