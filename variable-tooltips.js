@@ -1,7 +1,8 @@
-// Runs in the Figma page. Shows a variable's description and HEX in a tooltip when hovering it in the
-// variable picker or on an applied variable. All data is read live from Figma's own React props, so it works
-// in any file and with any library: the picker row has the variable object, the applied chip has
-// variableDescription and variableValue.
+// Runs in the Figma page. Replaces Figma's tooltips for variables and text styles with a compact one.
+// Variables: description and HEX. Text styles: description, font weight and letter spacing.
+// Data is read live from Figma's own React props, so it works in any file and with any library: the picker row
+// has the variable object, the applied chip has variableDescription and variableValue, a style row has dsStyle.
+// Font weight and letter spacing of a style come from the launcher (Figma REST API) through figmaTweaksAction.
 (function () {
   // Re-injection (live reload) replaces the previous instance.
   if (window.__figmaTweaksTips) window.__figmaTweaksTips.dispose();
@@ -47,8 +48,86 @@
     return hex + ' · ' + Math.round(sw.a * 100) + '%';
   }
 
+  // ---- Text styles ----
+  // Figma marks them with data-tooltip="style_info" and shows its own tooltip from these attributes. They are moved
+  // to data-ft-* on first hover, so Figma's tooltip never opens and the element stays findable.
+  function takeStyle(target) {
+    var el = target.closest('[data-tooltip="style_info"]');
+    if (el) {
+      el.setAttribute('data-ft-style', '1');
+      el.setAttribute('data-ft-description', el.getAttribute('data-tooltip-style-description') || '');
+      ['data-tooltip', 'data-tooltip-type', 'data-tooltip-style-description', 'data-tooltip-style-name'].forEach(function (a) { el.removeAttribute(a); });
+      return el;
+    }
+    return target.closest('[data-ft-style]');
+  }
+
+  // The style object (name, description, file_key, node_id, key) the row was rendered from.
+  function dsStyleOf(el) {
+    for (var f = fiberOf(el), i = 0; f && i < 25; f = f.return, i++) {
+      var p = f.memoizedProps;
+      if (!p || typeof p !== 'object') continue;
+      for (var k in p) {
+        var v = p[k];
+        if (v && typeof v === 'object' && !v.$$typeof && typeof v.node_id === 'string' && typeof v.file_key === 'string') return v;
+      }
+    }
+    return null;
+  }
+
+  state.styles = {}; // style key -> { weight, spacing } or false (not available)
+  function styleMeta(key) {
+    var s = state.styles[key];
+    return s ? s.weight + ' · ' + s.spacing : null;
+  }
+  window.__figmaTweaksStyle = function (key, info) {
+    state.styles[key] = info || false;
+    if (currentInfo && currentInfo.styleKey === key) {
+      currentInfo.hex = styleMeta(key);
+      if (currentInfo.shown) show(currentInfo);
+    }
+  };
+
+  // The "Ag" icon of a style row: first small box in the row.
+  function iconOf(row) {
+    var all = row.querySelectorAll('*');
+    // The glyph itself (an svg or the "Ag" text), not a padded wrapper around it.
+    for (var g = 0; g < all.length; g++) {
+      var gr = all[g].getBoundingClientRect();
+      if (gr.width > 0 && gr.width <= 32 && (all[g].tagName.toLowerCase() === 'svg' || (all[g].children.length === 0 && (all[g].textContent || '').trim() === 'Ag'))) return { el: all[g] };
+    }
+    for (var i = 0; i < all.length; i++) {
+      var r = all[i].getBoundingClientRect();
+      if (r.width >= 8 && r.width <= 32 && r.height >= 8 && r.height <= 32) return { el: all[i] };
+    }
+    return null;
+  }
+
+  function resolveStyle(el) {
+    var ds = dsStyleOf(el);
+    var description = (ds && ds.description) || el.getAttribute('data-ft-description') || '';
+    var meta = null, key = null;
+    if (ds) {
+      key = ds.key;
+      if (state.styles[key] === undefined && window.figmaTweaksAction) {
+        state.styles[key] = false; // one request per style
+        window.figmaTweaksAction('style:' + JSON.stringify({ key: key, file: ds.file_key, node: ds.node_id }));
+      }
+      meta = styleMeta(key);
+    }
+    return { el: el, description: description, hex: meta, styleKey: key, icon: true, chip: el.tagName === 'BUTTON' };
+  }
+
   // Returns { el, description, hex } for the hovered element, or null.
   function resolve(target) {
+    var st = takeStyle(target);
+    if (st) return resolveStyle(st);
+    // Text style row in the Assets panel: no tooltip attributes there, only the style object in the React props.
+    var ti = target.closest('[role="treeitem"]');
+    if (ti) {
+      var ds = dsStyleOf(ti);
+      if (ds && ds.style_type === 'TEXT') return resolveStyle(ti);
+    }
     var row = target.closest('[data-testid="variable-list-item"]');
     if (row) {
       var v = variableOf(row), hex = hexOf(row);
@@ -59,29 +138,38 @@
     for (var f = fiberOf(target), i = 0; f && i < 12; f = f.return, i++) {
       var p = f.memoizedProps;
       if (p && typeof p === 'object' && typeof p.variableName === 'string') {
-        var el = target;
-        while (el.parentElement && el.parentElement.getBoundingClientRect().height < 40 && el.parentElement !== document.body) el = el.parentElement;
+        // The chip's own button, like the text style chip, so both tooltips sit at the same distance.
+        var el = target.closest('button') || target;
+        while (el.parentElement && el.getBoundingClientRect().height < 20 && el.parentElement !== document.body) el = el.parentElement;
+        // Figma's own tooltip sits on a child with data-tooltip, drop it so only ours opens.
+        [].slice.call(el.querySelectorAll('[data-tooltip]')).concat(target.closest('[data-tooltip]') || []).forEach(function (n) {
+          n.removeAttribute('data-tooltip'); n.removeAttribute('data-tooltip-type');
+        });
         if (!p.variableDescription && !p.variableValue) return null;
-        return { el: el, description: p.variableDescription, hex: p.variableValue };
+        return { el: el, description: p.variableDescription, hex: p.variableValue, chip: true };
       }
     }
     return null;
   }
 
-  var tip = null, timer = null, current = null;
+  var tip = null, timer = null, current = null, currentInfo = null;
   function hide() {
     clearTimeout(timer); current = null;
+    if (currentInfo) currentInfo.shown = false;
+    currentInfo = null;
     if (tip) tip.style.display = 'none';
   }
   function show(info) {
+    info.shown = true;
     if (!tip) {
       tip = document.createElement('div');
       tip.id = 'figma-tweaks-tip';
-      tip.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;max-width:260px;padding:6px 8px;border-radius:5px;' +
+      tip.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;max-width:260px;padding:6px 8px;border-radius:5px;' +
         'background:#1e1e1e;color:#fff;font:11px/16px Inter,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);display:none';
       document.documentElement.appendChild(tip);
     }
     tip.textContent = '';
+    if (!info.description && !info.hex) { tip.style.display = 'none'; return; }
     if (info.description) {
       var l1 = document.createElement('div');
       l1.textContent = info.description;
@@ -95,10 +183,15 @@
     }
     tip.style.display = 'block';
     // 4px below the color swatch, left edges aligned (the row itself if it has no swatch).
-    var sw = swatchOf(info.el), r = (sw ? sw.el : info.el).getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    var sw = info.icon ? iconOf(info.el) : info.chip ? null : swatchOf(info.el), r = (sw ? sw.el : info.el).getBoundingClientRect();
+    // Long text wraps instead of shifting the tooltip off the anchor near the window edge.
+    tip.style.maxWidth = Math.max(140, Math.min(260, window.innerWidth - r.left - 8)) + 'px';
+    var w = tip.offsetWidth, h = tip.offsetHeight;
     var x = Math.min(Math.max(4, r.left), window.innerWidth - w - 4);
-    var y = r.bottom + 4;
-    if (y + h > window.innerHeight - 4) y = r.top - h - 4;
+    // A chip in the properties panel: below the whole field. A list row: below the swatch or icon.
+    var box = info.chip ? info.el.getBoundingClientRect() : r;
+    var y = box.bottom + 4;
+    if (y + h > window.innerHeight - 4) y = box.top - h - 4;
     tip.style.left = x + 'px';
     tip.style.top = y + 'px';
   }
@@ -109,15 +202,15 @@
     var info = resolve(el);
     if (!info) { hide(); return; }
     if (info.el === current) return;
-    hide(); current = info.el;
+    hide(); current = info.el; currentInfo = info;
     timer = setTimeout(function () { if (current === info.el) show(info); }, 350);
   }
-  document.addEventListener('mouseover', onOver, true);
+  document.addEventListener('pointerover', onOver, true);
   document.addEventListener('mousedown', hide, true);
   document.addEventListener('scroll', hide, true);
   state.dispose = function () {
     hide();
-    document.removeEventListener('mouseover', onOver, true);
+    document.removeEventListener('pointerover', onOver, true);
     document.removeEventListener('mousedown', hide, true);
     document.removeEventListener('scroll', hide, true);
     if (tip) tip.remove();
