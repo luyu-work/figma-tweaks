@@ -90,15 +90,20 @@
 
   // The "Ag" icon of a style row: first small box in the row.
   function iconOf(row) {
-    var all = row.querySelectorAll('*');
-    // The glyph itself (an svg or the "Ag" text), not a padded wrapper around it.
+    // The glyph itself (svg, img or the "Ag" text) that sits leftmost in the row. Not a padded wrapper, and not the
+    // action buttons that appear on the right when the row is hovered.
+    var all = row.querySelectorAll('*'), best = null, bestLeft = Infinity;
     for (var g = 0; g < all.length; g++) {
-      var gr = all[g].getBoundingClientRect();
-      if (gr.width > 0 && gr.width <= 32 && (all[g].tagName.toLowerCase() === 'svg' || (all[g].children.length === 0 && (all[g].textContent || '').trim() === 'Ag'))) return { el: all[g] };
+      var r = all[g].getBoundingClientRect();
+      if (r.width < 8 || r.width > 32 || r.height < 8 || r.height > 32) continue;
+      var tag = all[g].tagName.toLowerCase();
+      var glyph = tag === 'svg' || tag === 'img' || (all[g].children.length === 0 && (all[g].textContent || '').trim() === 'Ag');
+      if (glyph && r.left < bestLeft) { best = all[g]; bestLeft = r.left; }
     }
+    if (best) return { el: best };
     for (var i = 0; i < all.length; i++) {
-      var r = all[i].getBoundingClientRect();
-      if (r.width >= 8 && r.width <= 32 && r.height >= 8 && r.height <= 32) return { el: all[i] };
+      var q = all[i].getBoundingClientRect();
+      if (q.width >= 8 && q.width <= 32 && q.height >= 8 && q.height <= 32) return { el: all[i] };
     }
     return null;
   }
@@ -183,15 +188,16 @@
     }
     tip.style.display = 'block';
     // 4px below the color swatch, left edges aligned (the row itself if it has no swatch).
-    var sw = info.icon ? iconOf(info.el) : info.chip ? null : swatchOf(info.el), r = (sw ? sw.el : info.el).getBoundingClientRect();
+    var sw = info.chip ? null : info.icon ? iconOf(info.el) : swatchOf(info.el), r = (sw ? sw.el : info.el).getBoundingClientRect();
     // Long text wraps instead of shifting the tooltip off the anchor near the window edge.
     tip.style.maxWidth = Math.max(140, Math.min(260, window.innerWidth - r.left - 8)) + 'px';
     var w = tip.offsetWidth, h = tip.offsetHeight;
     var x = Math.min(Math.max(4, r.left), window.innerWidth - w - 4);
     // A chip in the properties panel: below the whole field. A list row: below the swatch or icon.
     var box = info.chip ? info.el.getBoundingClientRect() : r;
-    var y = box.bottom + 4;
-    if (y + h > window.innerHeight - 4) y = box.top - h - 4;
+    var gap = info.chip ? 4 : 8;
+    var y = box.bottom + gap;
+    if (y + h > window.innerHeight - 4) y = box.top - h - gap;
     tip.style.left = x + 'px';
     tip.style.top = y + 'px';
   }
