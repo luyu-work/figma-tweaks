@@ -22,7 +22,8 @@ function run(cmd, args, opts = {}) {
 
 async function updateGit(log) {
   const before = await run('git', ['rev-parse', 'HEAD'], { cwd: ROOT });
-  await run('git', ['pull', '--ff-only'], { cwd: ROOT });
+  // Public repo over https, so no SSH key or credentials are needed whatever origin points to.
+  await run('git', ['pull', '--ff-only', `https://github.com/${REPO}.git`, 'main'], { cwd: ROOT, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
   const after = await run('git', ['rev-parse', 'HEAD'], { cwd: ROOT });
   if (before === after) { log('update git: up to date'); return null; }
   const version = await run('git', ['log', '-1', '--format=%s'], { cwd: ROOT });
