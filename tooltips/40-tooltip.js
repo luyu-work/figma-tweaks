@@ -2,6 +2,7 @@
   var tip = null, timer = null, current = null, currentInfo = null;
   function hide() {
     clearTimeout(timer); current = null;
+    if (tip && tip.style.display === 'block') state.lastHide = Date.now(); // a tooltip was open a moment ago, the next one opens at once
     if (currentInfo) currentInfo.shown = false;
     currentInfo = null;
     if (tip) tip.style.display = 'none';
