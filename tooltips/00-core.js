@@ -52,28 +52,16 @@
   // Figma marks them with data-tooltip="style_info" and shows its own tooltip from these attributes. They are moved
   // to data-ft-* on first hover, so Figma's tooltip never opens and the element stays findable.
   function takeStyle(target) {
-    var el = target.closest('[data-tooltip="style_info"]');
-    if (!el) {
-      // The style chip in the properties panel: the marker sits on an icon inside the button, the button itself has
-      // an empty data-tooltip. The whole button is the hover target then.
-      var btn = target.closest('button[data-tooltip-style-name]');
-      var mark = btn && btn.querySelector('[data-tooltip="style_info"]');
-      if (mark) {
-        ['data-tooltip', 'data-tooltip-type', 'data-tooltip-style-description', 'data-tooltip-style-name'].forEach(function (a) { btn.removeAttribute(a); });
-        mark.setAttribute('data-ft-description', mark.getAttribute('data-tooltip-style-description') || '');
-        ['data-tooltip', 'data-tooltip-type', 'data-tooltip-style-description', 'data-tooltip-style-name'].forEach(function (a) { mark.removeAttribute(a); });
-        btn.setAttribute('data-ft-style', '1');
-        btn.setAttribute('data-ft-description', mark.getAttribute('data-ft-description'));
-        return btn;
-      }
-    }
-    if (el) {
-      el.setAttribute('data-ft-style', '1');
-      el.setAttribute('data-ft-description', el.getAttribute('data-tooltip-style-description') || '');
-      ['data-tooltip', 'data-tooltip-type', 'data-tooltip-style-description', 'data-tooltip-style-name'].forEach(function (a) { el.removeAttribute(a); });
-      return el;
-    }
-    return target.closest('[data-ft-style]');
+    // The row (picker) or button (chip in the properties panel) that carries the style name. Figma's own tooltip marker
+    // is on the element itself or on an icon inside it.
+    var host = target.closest('[data-tooltip="style_info"], [data-tooltip-style-name]');
+    if (!host) return target.closest('[data-ft-style]');
+    var mark = host.getAttribute('data-tooltip') === 'style_info' ? host : host.querySelector('[data-tooltip="style_info"]');
+    var desc = host.getAttribute('data-tooltip-style-description') || (mark && mark.getAttribute('data-tooltip-style-description')) || '';
+    [host, mark].forEach(function (el) { if (el) { el.removeAttribute('data-tooltip'); el.removeAttribute('data-tooltip-type'); } });
+    host.setAttribute('data-ft-style', '1');
+    host.setAttribute('data-ft-description', desc);
+    return host;
   }
 
   // The style object (name, description, file_key, node_id, key) the row was rendered from.
