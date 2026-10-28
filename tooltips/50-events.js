@@ -20,7 +20,7 @@
       els.forEach(function (e) { var ds = dsStyleOf(e); if (ds && !ds.isLocal) prefetchLibrary(ds.library_key); });
     }, 400);
   });
-  watcher.observe(document.body, { childList: true, subtree: true });
+  watcher.observe(document.documentElement, { childList: true, subtree: true });
   document.addEventListener('pointerover', onOver, true);
   document.addEventListener('mousedown', hide, true);
   document.addEventListener('scroll', hide, true);
