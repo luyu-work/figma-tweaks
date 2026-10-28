@@ -191,6 +191,59 @@
 
   state.styles = {}; // style key -> { weight, spacing }
   state.asked = {};  // style key -> time of the last request, a failed one is retried after 30 s
+
+  // A published style version never changes (content_hash), so results are kept in localStorage and later sessions
+  // show them at once.
+  var STORE = 'figmaTweaks.styles', saved = {}, saveTimer = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) {}
+  function remember(ds, info) {
+    saved[ds.key] = { h: ds.content_hash, w: info.weight, s: info.spacing };
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try {
+        var keys = Object.keys(saved);
+        if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach(function (k) { delete saved[k]; });
+        localStorage.setItem(STORE, JSON.stringify(saved));
+      } catch (e) {}
+    }, 1000);
+  }
+  function recall(ds) { var e = saved[ds.key]; return e && e.h === ds.content_hash ? { weight: e.w, spacing: e.s } : null; }
+
+  // Downloads run four at a time, a hovered style goes first.
+  var active = 0, waiting = [];
+  function pump() {
+    while (active < 4 && waiting.length) {
+      (function (job) {
+        active++;
+        job.fn().then(function (v) { active--; job.resolve(v); pump(); });
+      })(waiting.shift());
+    }
+  }
+  function getStyle(ds, urgent) {
+    var hit = recall(ds);
+    if (hit) return Promise.resolve(hit);
+    return new Promise(function (resolve) {
+      var job = { fn: function () { return loadStyle(ds); }, resolve: resolve };
+      if (urgent) waiting.unshift(job); else waiting.push(job);
+      pump();
+    }).then(function (info) { if (info) remember(ds, info); return info; });
+  }
+
+  // All text styles of a library are loaded in the background the first time one of its styles is seen.
+  state.libs = {};
+  function prefetchLibrary(lk) {
+    if (!lk || state.libs[lk]) return;
+    state.libs[lk] = true;
+    fetch('/api/design_systems/v2/library/' + lk + '/styles?include_realtime=true', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.meta) return;
+        j.meta.styles.filter(function (st) { return st.style_type === 'TEXT'; }).slice(0, 150).forEach(function (st) {
+          getStyle(st, false).then(function (info) { if (info) state.styles[st.key] = info; });
+        });
+      })
+      .catch(function () { state.libs[lk] = false; });
+  }
   function styleMeta(key) {
     var s = state.styles[key];
     if (!s) return null;
@@ -235,9 +288,16 @@
       key = ds.key;
       var local = ds.isLocal ? localStyle(ds) : null;
       if (local) state.styles[key] = local; // always fresh, the style may have been edited
-      else if (!state.styles[key] && !(state.asked[key] > Date.now() - 30000)) {
-        state.asked[key] = Date.now();
-        loadStyle(ds).then(function (info) { window.__figmaTweaksStyle(key, info); });
+      else {
+        if (!state.styles[key]) {
+          var hit = recall(ds);
+          if (hit) state.styles[key] = hit;
+          else if (!(state.asked[key] > Date.now() - 30000)) {
+            state.asked[key] = Date.now();
+            getStyle(ds, true).then(function (info) { window.__figmaTweaksStyle(key, info); });
+          }
+        }
+        prefetchLibrary(ds.library_key);
       }
       meta = styleMeta(key);
     }
@@ -332,11 +392,25 @@
     hide(); current = info.el; currentInfo = info;
     timer = setTimeout(function () { if (current === info.el) show(info); }, 350);
   }
+  // Opening the style picker or selecting a text with a library style starts loading that library right away.
+  var watchTimer = null;
+  var watcher = new MutationObserver(function () {
+    if (watchTimer) return;
+    watchTimer = setTimeout(function () {
+      watchTimer = null;
+      var els = [].slice.call(document.querySelectorAll('[role="rowheader"]')).slice(0, 40);
+      var chip = document.querySelector('button[class*="style_title"]');
+      if (chip) els.push(chip);
+      els.forEach(function (e) { var ds = dsStyleOf(e); if (ds && !ds.isLocal) prefetchLibrary(ds.library_key); });
+    }, 400);
+  });
+  watcher.observe(document.body, { childList: true, subtree: true });
   document.addEventListener('pointerover', onOver, true);
   document.addEventListener('mousedown', hide, true);
   document.addEventListener('scroll', hide, true);
   state.dispose = function () {
     hide();
+    watcher.disconnect();
     document.removeEventListener('pointerover', onOver, true);
     document.removeEventListener('mousedown', hide, true);
     document.removeEventListener('scroll', hide, true);
