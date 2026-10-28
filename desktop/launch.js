@@ -8,8 +8,17 @@ const ROOT = path.join(process.env.LOCALAPPDATA, 'Figma');
 const CSS_FILE = path.join(__dirname, '..', 'userContent.css');
 const LOG = path.join(__dirname, 'launch.log');
 
+// The log keeps only the current day: the first write of a new day starts the file over.
+const day = (d) => d.toLocaleDateString('sv');
+let logDay = null;
 function log(...a) {
-  try { fs.appendFileSync(LOG, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}
+  try {
+    const now = new Date();
+    if (!logDay) { try { logDay = day(fs.statSync(LOG).mtime); } catch { logDay = day(now); } }
+    const line = `[${now.toISOString()}] ${a.join(' ')}\n`;
+    if (logDay !== day(now)) { fs.writeFileSync(LOG, line); logDay = day(now); }
+    else fs.appendFileSync(LOG, line);
+  } catch {}
 }
 
 function latestExe() {
