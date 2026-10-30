@@ -5,6 +5,7 @@
 (function () {
   // mode "visible": the page is on screen. "focus": it has keyboard focus. "any": any file page.
   window.__figmaTweaksShowUpdate = function (version, mode) {
+    if (location.protocol === 'file:') return false; // tab bar shell, not the canvas
     var ok = mode === 'any' ? /^\/(design|file|board|slides|make)\//.test(location.pathname)
       : mode === 'focus' ? document.hasFocus()
       : document.visibilityState === 'visible';
