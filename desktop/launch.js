@@ -119,41 +119,37 @@ function tooltipsScript() {
   } catch (e) { log('tooltips read error', e.message); return ''; }
 }
 
-// Update modal: ../update-modal.js defines window.__figmaTweaksShowUpdate(version).
-function modalScript() {
+// Update button: ../update-button.js defines window.__figmaTweaksShowUpdate(version).
+function updateButtonScript() {
   try {
-    const fn = fs.readFileSync(path.join(__dirname, '..', 'update-modal.js'), 'utf8').trim();
+    const fn = fs.readFileSync(path.join(__dirname, '..', 'update-button.js'), 'utf8').trim();
     return `\n(${fn})();`;
-  } catch (e) { log('modal read error', e.message); return ''; }
+  } catch (e) { log('update button read error', e.message); return ''; }
 }
 
 function scriptFor(css) {
-  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});${tooltipsScript()}${modalScript()}`;
+  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});${tooltipsScript()}${updateButtonScript()}`;
 }
 
-// Self-update. When files changed, show the modal in the first visible Figma page (retry until one takes it).
+// Self-update. When files changed, a blue button sits in the tab bar until Figma restarts. Only the tab bar page
+// (file:) takes it, the others answer false. Polled every second, the tab bar may re-render and drop the button.
 let updatedVersion = null;
-let modalRound = 0;
-function showUpdateModal() {
+let updateButtonShown = false;
+function showUpdateButton() {
   if (!updatedVersion) return;
-  const mode = modalRound < 3 ? 'visible' : modalRound < 6 ? 'focus' : 'any'; // fall back if no page reports itself visible
-  modalRound++;
-  // All pages at once: a hidden page may never answer, it must not block the visible one.
   for (const sid of sessions) {
     send('Runtime.evaluate', {
-      expression: `JSON.stringify([window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}, ${JSON.stringify(mode)}) : 'nofn', document.visibilityState, document.hasFocus(), location.pathname.slice(0, 30)])`,
+      expression: `window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}) : false`,
       returnByValue: true,
     }, sid, (r) => {
-      let v = [];
-      try { v = JSON.parse(r.result.value); } catch {}
-      if (v[0] === true) { updatedVersion = null; log('update modal shown', mode, v[3]); }
+      if (r && r.result && r.result.value === true && !updateButtonShown) { updateButtonShown = true; log('update button shown'); }
     });
   }
 }
-setInterval(showUpdateModal, 3000);
-require('./update')(log, (version) => { updatedVersion = version; showUpdateModal(); });
+setInterval(showUpdateButton, 1000);
+require('./update')(log, (version) => { updatedVersion = version; updateButtonShown = false; showUpdateButton(); });
 
-// "Перезапустить" in the modal: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
+// A click on the update button: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
 function restartFigma() {
   const lnk = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Figma.lnk').replace(/'/g, "''");
   const ps = `$n=0; while ((Get-Process Figma -ErrorAction SilentlyContinue) -and $n -lt 60) { Start-Sleep -Milliseconds 500; $n++ }; Start-Process '${lnk}'`;
@@ -185,7 +181,6 @@ function inject(sessionId) {
 
 function attach(info) {
   if (info.type !== 'page' || info.attached) return;
-  if (info.url && info.url.startsWith('file:')) return; // tab bar shell
   send('Target.attachToTarget', { targetId: info.targetId, flatten: true });
 }
 
@@ -232,7 +227,7 @@ function reload() {
   }, 150);
 }
 fs.watch(path.dirname(CSS_FILE), (_e, file) => {
-  if ([path.basename(CSS_FILE), 'update-modal.js'].includes(file)) reload();
+  if ([path.basename(CSS_FILE), 'update-button.js'].includes(file)) reload();
 });
 try { fs.watch(TOOLTIPS_DIR, reload); } catch (e) { log('watch error', e.message); }
 
