@@ -42,17 +42,17 @@
     root.querySelector('.title').textContent = 'Обновление figma-tweaks ' + version;
 
     function close() {
-      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keydown', onKey, true);
       host.remove();
     }
-    function onKey(e) { if (e.key === 'Escape') close(); }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }
     root.querySelector('.later').addEventListener('click', close);
     root.querySelector('.x').addEventListener('click', close);
     root.querySelector('.restart').addEventListener('click', function () {
       if (window.figmaTweaksAction) window.figmaTweaksAction('restart');
       close();
     });
-    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey, true);
     document.documentElement.appendChild(host);
     return true;
   };
