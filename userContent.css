@@ -157,4 +157,10 @@
   [data-testid="left-panel-assistant-left-rail"] {
     display: none !important;
   }
+
+  /* Text styles picker: Figma drops the space before "· 18/24" (leading space of a flex item), the dot sticks to the name. Same gap on both sides */
+  [role="rowheader"][data-tooltip-style-name] > span:last-child,
+  [class*="style_title--styleTag"] {
+    padding-left: 3px !important;
+  }
 }
