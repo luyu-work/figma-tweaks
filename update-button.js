@@ -13,13 +13,12 @@
 
     var wrap = document.createElement('div');
     wrap.id = 'figma-tweaks-update';
-    wrap.style.cssText = 'display:flex;align-items:center;flex:0 0 auto;padding-right:8px;margin:0 0 0 8px;-webkit-app-region:no-drag';
+    wrap.style.cssText = 'display:flex;align-items:center;flex:0 0 auto;padding-right:8px;margin:0 0 0 8px;border-right:solid 1px var(--color-bordertranslucent);-webkit-app-region:no-drag';
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.style.cssText = 'height:24px;padding:0 10px;border:0;border-radius:5px;background:#0d99ff;color:#fff;' +
       'font:500 11px/16px Inter,system-ui,sans-serif;white-space:nowrap;cursor:pointer';
-    var tag = String(version).match(/^v\.\d+(\.\d+)*/);
-    btn.textContent = 'Обновить figma-tweaks до ' + (tag ? tag[0] : version);
+    btn.textContent = 'Обновить figma-tweaks';
     btn.addEventListener('mouseenter', function () { btn.style.background = '#0a85e0'; });
     btn.addEventListener('mouseleave', function () { btn.style.background = '#0d99ff'; });
     btn.addEventListener('click', function () {
