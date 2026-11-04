@@ -8,8 +8,6 @@
     var bar = document.querySelector('.tabContainer');
     if (!bar) return false;
     if (document.getElementById('figma-tweaks-update')) return true;
-    var old = document.getElementById('figma-tweaks-update-style');
-    if (old) old.remove();
 
     var wrap = document.createElement('div');
     wrap.id = 'figma-tweaks-update';
@@ -25,12 +23,6 @@
       if (window.figmaTweaksAction) window.figmaTweaksAction('restart');
     });
     wrap.appendChild(btn);
-
-    // The button takes the place of the Home tab. The style lives and dies with the button.
-    var hide = document.createElement('style');
-    hide.id = 'figma-tweaks-update-style';
-    hide.textContent = '[class*="tab--fileBrowserTab"]{display:none !important}';
-    document.head.appendChild(hide);
 
     var spacer = bar.querySelector('[class*="tab_bar--trafficLightsSpacer"]');
     if (spacer) spacer.after(wrap); else bar.prepend(wrap);
