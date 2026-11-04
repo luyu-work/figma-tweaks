@@ -31,5 +31,5 @@ SHA256:D0RyMd0uWI0MvOkv7ZVj3yTiLBpIhqovVgY4sGlgqLs
 Проверить тег вручную можно так.
 
 ```
-git -c gpg.ssh.allowedSignersFile=desktop/allowed_signers verify-tag v.1.4
+git -c gpg.ssh.allowedSignersFile=desktop/allowed_signers verify-tag v.1.40
 ```

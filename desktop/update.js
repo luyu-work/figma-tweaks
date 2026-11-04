@@ -103,10 +103,18 @@ async function updateZip(log) {
   if (!refs.length) { log('update zip: no release tags'); return null; }
   const latest = refs.sort((a, b) => newerTag(a.tag, b.tag)).pop();
 
+  // .version holds "<tag object sha> <tag name>". An older file has the sha only, then the tag name is unknown.
   let current = null;
-  try { current = fs.readFileSync(VERSION_FILE, 'utf8').trim(); } catch {}
-  if (current === null) { fs.writeFileSync(VERSION_FILE, latest.sha); log('update zip: first run, version recorded'); return null; } // fresh install is already the latest
-  if (latest.sha === current) { log('update zip: up to date'); return null; }
+  try { current = fs.readFileSync(VERSION_FILE, 'utf8').trim().split(/\s+/); } catch {}
+  const record = `${latest.sha} ${latest.tag}`;
+  if (current === null) { fs.writeFileSync(VERSION_FILE, record); log('update zip: first run, version recorded'); return null; } // fresh install is already the latest
+  if (latest.sha === current[0]) {
+    if (current[1] !== latest.tag) fs.writeFileSync(VERSION_FILE, record);
+    log('update zip: up to date');
+    return null;
+  }
+  // A signed but older release served as the latest (newer tags hidden) must not replace the installed one.
+  if (parseTag(current[1] || '') && newerTag(latest.tag, current[1]) <= 0) throw new Error(`refusing rollback from ${current[1]} to ${latest.tag}`);
 
   const tagRes = await fetch(`https://api.github.com/repos/${REPO}/git/tags/${latest.sha}`, { headers: API_HEADERS, signal: AbortSignal.timeout(10000) });
   if (!tagRes.ok) throw new Error(`api ${tagRes.status}`);
@@ -123,7 +131,7 @@ async function updateZip(log) {
     await run('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${tmp}' -Force`]);
     const src = path.join(tmp, fs.readdirSync(tmp).find((d) => fs.statSync(path.join(tmp, d)).isDirectory()));
     fs.cpSync(src, ROOT, { recursive: true, force: true });
-    fs.writeFileSync(VERSION_FILE, latest.sha);
+    fs.writeFileSync(VERSION_FILE, record);
     log('update zip: updated to', latest.tag);
     return latest.tag;
   } finally {
