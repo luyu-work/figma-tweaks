@@ -48,7 +48,7 @@ function readCss() {
 }
 
 // Runs in the page: keeps one <style id="figma-tweaks"> with the given CSS.
-// Re-adds the style if the page drops it or the document was not ready yet.
+// Re-adds the style if the page drops it, changes its text or the document was not ready yet. DOM events only, no timer.
 const PAGE_FN = `window.__figmaTweaks = function (css) {
   if (!/(^|\\.)figma\\.com$/.test(location.hostname)) return;
   window.__figmaTweaksCss = css;
@@ -60,6 +60,18 @@ const PAGE_FN = `window.__figmaTweaks = function (css) {
     if (s.textContent !== window.__figmaTweaksCss) s.textContent = window.__figmaTweaksCss;
   };
   put();
+  var obs = window.__figmaTweaksObs;
+  if (obs) obs.disconnect();
+  var watch = function () {
+    put();
+    var st = document.getElementById('figma-tweaks');
+    obs.observe(document, { childList: true });
+    if (document.documentElement) obs.observe(document.documentElement, { childList: true });
+    if (document.head) obs.observe(document.head, { childList: true });
+    if (st) obs.observe(st, { childList: true, characterData: true, subtree: true });
+  };
+  obs = window.__figmaTweaksObs = new MutationObserver(watch);
+  watch();
   // "More" is restyled as "Import" in the CSS: after its click, press Import in the (invisible) menu.
   if (!window.__figmaTweaksImport) {
     window.__figmaTweaksImport = true;
@@ -78,7 +90,6 @@ const PAGE_FN = `window.__figmaTweaks = function (css) {
     document.addEventListener('pointerdown', onMore, true);
     document.addEventListener('click', onMore, true);
   }
-  if (!window.__figmaTweaksTimer) window.__figmaTweaksTimer = setInterval(put, 1000);
 };`;
 
 const exe = latestExe();
@@ -129,25 +140,19 @@ function updateButtonScript() {
 
 let railPx = 0, railPage = 0; // see 'rail:' in the binding handler
 function scriptFor(css) {
-  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});\nwindow.__figmaTweaksRailPx = ${railPx};window.__figmaTweaksPagePx = ${railPage};${tooltipsScript()}${updateButtonScript()}`;
+  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});\nwindow.__figmaTweaksRailPx = ${railPx};window.__figmaTweaksPagePx = ${railPage};window.__figmaTweaksUpdateVersion = ${JSON.stringify(updatedVersion)};${tooltipsScript()}${updateButtonScript()}`;
 }
 
 // Self-update. When files changed, a blue button sits in the tab bar until Figma restarts. Only the tab bar page
-// (file:) takes it, the others answer false. Polled every second, the tab bar may re-render and drop the button.
+// (file:) takes it, the others answer false. The page keeps the button itself (see update-button.js), pages injected later get the version in their script.
 let updatedVersion = null;
 let updateButtonShown = false;
 function showUpdateButton() {
   if (!updatedVersion) return;
   for (const sid of sessions) {
-    send('Runtime.evaluate', {
-      expression: `window.__figmaTweaksShowUpdate ? window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)}) : false`,
-      returnByValue: true,
-    }, sid, (r) => {
-      if (r && r.result && r.result.value === true && !updateButtonShown) { updateButtonShown = true; log('update button shown'); }
-    });
+    send('Runtime.evaluate', { expression: `window.__figmaTweaksShowUpdate && window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)})` }, sid);
   }
 }
-setInterval(showUpdateButton, 1000);
 require('./update')(log, (version) => { updatedVersion = version; updateButtonShown = false; showUpdateButton(); });
 
 // A click on the update button: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
@@ -205,7 +210,8 @@ fromFigma.on('data', (chunk) => {
       send('Runtime.evaluate', { expression: scriptFor(readCss()) }, msg.sessionId);
     } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction') {
       const payload = String(msg.params.payload);
-      if (payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
+      if (payload === 'update-shown') { if (!updateButtonShown) { updateButtonShown = true; log('update button shown'); } }
+      else if (payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
       else if (payload.startsWith('rail:')) {
         // Width of the editor's left rail in physical pixels, measured in the editor page. The tab bar page sets its Home tab to it.
         // And the width of the editor page itself, the window frame makes it a bit narrower than the tab bar page.

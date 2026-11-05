@@ -1,10 +1,11 @@
 // Tab bar shell (file: page). The bottom line of the bar is a translucent white border, over a dark page it vanishes, so it is made solid.
+// The first run may come before the document has a head (the new-document script), then the style is added by the run after DOMContentLoaded, never to the document itself, that would make it the root element and blank the page.
 // The tab group fill is 38px high and stops short of that border, so it is stretched over it.
 // The Home tab is narrowed to the width of the left rail of the editor. That width depends on the screen, so the
 // editor page measures it (in physical pixels) and reports it through the launcher, see the rail part below.
 if (location.protocol === 'file:') {
   var tabbarStyle = document.getElementById('figma-tweaks-tabbar');
-  if (!tabbarStyle) { tabbarStyle = document.createElement('style'); tabbarStyle.id = 'figma-tweaks-tabbar'; document.head.appendChild(tabbarStyle); }
+  if (!tabbarStyle) { tabbarStyle = document.createElement('style'); tabbarStyle.id = 'figma-tweaks-tabbar'; if (document.head) document.head.appendChild(tabbarStyle); }
   var applyRail = function () {
     // Physical pixels of the rail to CSS pixels of this page, 44 until the editor reported.
     var w = window.__figmaTweaksRailPx > 0 ? window.__figmaTweaksRailPx / devicePixelRatio : 44;
@@ -20,40 +21,57 @@ if (location.protocol === 'file:') {
       (railSmooth ? ';transition:width .25s ease,flex-basis .25s ease,margin-left .25s ease !important' : '') + '}';
   };
   var railSmooth = false;
+  // Figma places the tab group fill from tab positions it measured itself. A width changed only by CSS leaves the fill
+  // where it was (a gap or an overlap after the Home tab shrinks), so Figma is made to measure again, at once and when the animation ends.
+  var railNudges = [];
+  var nudgeTabLayout = function () {
+    railNudges.forEach(clearTimeout);
+    railNudges = [0, 320].map(function (ms) { return setTimeout(function () { window.dispatchEvent(new Event('resize')); }, ms); });
+  };
   window.__figmaTweaksRail = function (px, page) {
     window.__figmaTweaksRailPx = px; window.__figmaTweaksPagePx = page; applyRail();
     if (!railSmooth) setTimeout(function () { railSmooth = true; applyRail(); }, 100);
+    nudgeTabLayout();
   };
   applyRail();
   // Width already known (live reload, tab bar page reopened): animate from the next change on.
   if (window.__figmaTweaksRailPx > 0) setTimeout(function () { railSmooth = true; applyRail(); }, 100);
 } else if (/(^|\.)figma\.com$/.test(location.hostname) && window.figmaTweaksAction) {
-  // Editor page: report the width of the left rail. No polling, only two moments: once when the rail appears after
-  // the page opened, and after "Additional labels" is toggled in the main menu (it changes the rail width).
-  var lastRail = 0;
-  var reportRail = function () {
+  // Editor page: report the width of the left rail whenever it changes. A ResizeObserver on the rail covers every cause
+  // (Additional labels on and off, the rail settling after the file opened, window zoom), and a changed width is reported
+  // once it stopped changing. A page in the background does not report, it reports once when it is shown, so the Home tab always
+  // matches the editor on screen. The rail may be mounted late or replaced, the DOM watcher of 50-events.js calls watchRail on page changes, there is no timer.
+  var lastRail = 0, railEl = null, railObs = null, railDebounce = null;
+  var sendRail = function () {
+    // Only the page on screen reports. Background pages are hidden, zero sized and have another pixel ratio, their rail width must not reach the tab bar.
+    if (document.visibilityState !== 'visible' || !innerWidth) return;
     var rail = document.querySelector('[data-testid="navigation-bar"]');
-    var px = rail ? rail.getBoundingClientRect().width * devicePixelRatio : 0;
+    var css = rail ? rail.getBoundingClientRect().width : 0;
+    // The rail is about 44 to 64 px wide. Anything far outside means the page is mid-render or broken, it must not resize the Home tab.
+    if (css < 20 || css > 150) return;
+    var px = css * devicePixelRatio;
     if (px > 0 && Math.abs(px - lastRail) > 0.01) { lastRail = px; window.figmaTweaksAction('rail:' + px + ':' + innerWidth * devicePixelRatio); }
-    return px > 0;
   };
-  // The rail is mounted a bit after the page, wait for it for up to 30 s.
-  var railTries = 0;
-  state.railTimer = setInterval(function () { if (reportRail() || ++railTries > 60) clearInterval(state.railTimer); }, 500);
-  var onRailMenu = function (e) {
-    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
-    var item = e.target.closest && e.target.closest('[role^="menuitem"]');
-    if (!item || !/^\s*Additional labels/.test(item.textContent)) return;
-    // The rail changes more than 600 ms after the click, measure every 250 ms for 4 s (the report is sent only on a change).
-    clearInterval(state.railBurst);
-    var n = 0;
-    state.railBurst = setInterval(function () { reportRail(); if (++n >= 16) clearInterval(state.railBurst); }, 250);
+  var queueRail = function () { clearTimeout(railDebounce); railDebounce = setTimeout(sendRail, 120); };
+  var watchRail = function () {
+    if (railEl && railEl.isConnected) return;
+    var rail = document.querySelector('[data-testid="navigation-bar"]');
+    if (!rail) return;
+    if (railObs) railObs.disconnect();
+    railEl = rail;
+    railObs = new ResizeObserver(queueRail);
+    railObs.observe(rail);
+    queueRail();
   };
-  document.addEventListener('click', onRailMenu, true);
-  document.addEventListener('keydown', onRailMenu, true);
+  var onRailShown = function () { if (document.visibilityState === 'visible') { lastRail = 0; queueRail(); } };
+  watchRail();
+  state.watchRail = watchRail; // the DOM watcher of 50-events.js calls it when the page changes
+  window.addEventListener('resize', queueRail);
+  document.addEventListener('visibilitychange', onRailShown);
   state.railOff = function () {
-    clearInterval(state.railBurst);
-    document.removeEventListener('click', onRailMenu, true);
-    document.removeEventListener('keydown', onRailMenu, true);
+    clearTimeout(railDebounce);
+    if (railObs) railObs.disconnect();
+    window.removeEventListener('resize', queueRail);
+    document.removeEventListener('visibilitychange', onRailShown);
   };
 }

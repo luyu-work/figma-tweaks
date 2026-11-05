@@ -1,10 +1,12 @@
 // Runs in the Figma page. Defines window.__figmaTweaksShowUpdate(version): a blue button at the start of the tab bar,
 // the spot of Figma's own "Update now" button. A click asks the launcher (binding figmaTweaksAction) to restart Figma.
-// Only the tab bar shell (file: page) takes it, every other page returns false. The launcher calls it every second
-// until the button is placed, the page re-adds it if Figma re-renders the tab bar and drops it.
+// Only the tab bar shell (file: page) takes it, every other page returns false. The page keeps the button itself,
+// no timer: a MutationObserver puts it back when Figma re-renders the tab bar and drops it. The launcher calls the
+// function once when an update arrives and passes the version to every page it injects later.
 (function () {
-  window.__figmaTweaksShowUpdate = function (version) {
-    if (location.protocol !== 'file:') return false;
+  var notified = false;
+
+  var place = function () {
     var bar = document.querySelector('.tabContainer');
     if (!bar) return false;
     if (document.getElementById('figma-tweaks-update')) return true;
@@ -26,6 +28,19 @@
 
     var spacer = bar.querySelector('[class*="tab_bar--trafficLightsSpacer"]');
     if (spacer) spacer.after(wrap); else bar.prepend(wrap);
+    if (!notified && window.figmaTweaksAction) { notified = true; window.figmaTweaksAction('update-shown'); }
     return true;
   };
+
+  window.__figmaTweaksShowUpdate = function (version) {
+    if (location.protocol !== 'file:') return false;
+    window.__figmaTweaksUpdateVersion = version;
+    if (window.__figmaTweaksUpdateObs) window.__figmaTweaksUpdateObs.disconnect();
+    var obs = window.__figmaTweaksUpdateObs = new MutationObserver(place);
+    obs.observe(document.documentElement || document, { childList: true, subtree: true });
+    return place();
+  };
+
+  // A page injected after the update arrived (tab bar reopened, live reload).
+  if (window.__figmaTweaksUpdateVersion) window.__figmaTweaksShowUpdate(window.__figmaTweaksUpdateVersion);
 })

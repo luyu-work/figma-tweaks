@@ -16,6 +16,7 @@
     watchTimer = setTimeout(function () {
       watchTimer = null;
       sceneGraph();
+      if (state.watchRail) state.watchRail();
       var els = [].slice.call(document.querySelectorAll('[role="rowheader"], [role="treeitem"]')).slice(0, 40);
       var chip = document.querySelector('button[class*="style_title"]');
       if (chip) els.push(chip);
@@ -29,7 +30,6 @@
   state.dispose = function () {
     hide();
     clearTimeout(state.preloadTimer);
-    clearInterval(state.railTimer);
     if (state.railOff) state.railOff();
     watcher.disconnect();
     document.removeEventListener('pointerover', onOver, true);
