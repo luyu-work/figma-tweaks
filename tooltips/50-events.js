@@ -29,6 +29,8 @@
   state.dispose = function () {
     hide();
     clearTimeout(state.preloadTimer);
+    clearInterval(state.railTimer);
+    if (state.railOff) state.railOff();
     watcher.disconnect();
     document.removeEventListener('pointerover', onOver, true);
     document.removeEventListener('mousedown', hide, true);

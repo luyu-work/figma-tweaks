@@ -127,8 +127,9 @@ function updateButtonScript() {
   } catch (e) { log('update button read error', e.message); return ''; }
 }
 
+let railPx = 0, railPage = 0; // see 'rail:' in the binding handler
 function scriptFor(css) {
-  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});${tooltipsScript()}${updateButtonScript()}`;
+  return `${PAGE_FN}\nwindow.__figmaTweaks(${JSON.stringify(css)});\nwindow.__figmaTweaksRailPx = ${railPx};window.__figmaTweaksPagePx = ${railPage};${tooltipsScript()}${updateButtonScript()}`;
 }
 
 // Self-update. When files changed, a blue button sits in the tab bar until Figma restarts. Only the tab bar page
@@ -203,7 +204,17 @@ fromFigma.on('data', (chunk) => {
       // Backup for pages where the on-new-document script did not run.
       send('Runtime.evaluate', { expression: scriptFor(readCss()) }, msg.sessionId);
     } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction') {
-      if (msg.params.payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
+      const payload = String(msg.params.payload);
+      if (payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }
+      else if (payload.startsWith('rail:')) {
+        // Width of the editor's left rail in physical pixels, measured in the editor page. The tab bar page sets its Home tab to it.
+        // And the width of the editor page itself, the window frame makes it a bit narrower than the tab bar page.
+        const [px, page] = payload.slice(5).split(':').map(parseFloat);
+        if (px > 0 && (px !== railPx || page !== railPage)) {
+          railPx = px; railPage = page || 0; log('rail', px, 'page', railPage);
+          for (const sid of sessions) send('Runtime.evaluate', { expression: `window.__figmaTweaksRail && window.__figmaTweaksRail(${px}, ${railPage})` }, sid);
+        }
+      }
     } else if (msg.method === 'Target.detachedFromTarget') {
       sessions.delete(msg.params.sessionId);
       scriptIds.delete(msg.params.sessionId);
