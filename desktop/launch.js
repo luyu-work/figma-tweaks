@@ -62,13 +62,16 @@ const PAGE_FN = `window.__figmaTweaks = function (css) {
   put();
   var obs = window.__figmaTweaksObs;
   if (obs) obs.disconnect();
+  // Each node is observed once, a node the page replaced (new head, new style) is observed when it appears.
+  var seen = [];
+  var track = function (n, o) { if (n && seen.indexOf(n) < 0) { seen.push(n); obs.observe(n, o); } };
   var watch = function () {
     put();
-    var st = document.getElementById('figma-tweaks');
-    obs.observe(document, { childList: true });
-    if (document.documentElement) obs.observe(document.documentElement, { childList: true });
-    if (document.head) obs.observe(document.head, { childList: true });
-    if (st) obs.observe(st, { childList: true, characterData: true, subtree: true });
+    seen = seen.filter(function (n) { return n === document || n.isConnected; });
+    track(document, { childList: true });
+    track(document.documentElement, { childList: true });
+    track(document.head, { childList: true });
+    track(document.getElementById('figma-tweaks'), { childList: true, characterData: true, subtree: true });
   };
   obs = window.__figmaTweaksObs = new MutationObserver(watch);
   watch();
@@ -80,12 +83,17 @@ const PAGE_FN = `window.__figmaTweaks = function (css) {
     var onMore = function (e) {
       if (busy || !e.target.closest || !e.target.closest('[data-testid="new-file-creation-more-button"]')) return;
       busy = true;
-      var tries = 0;
-      var t = setInterval(function () {
+      // Wait for the menu item to appear in the DOM, give up after a second.
+      var mo, giveUp;
+      var done = function () { mo.disconnect(); clearTimeout(giveUp); busy = false; };
+      var look = function () {
         var item = document.querySelector('[data-testid="file-import-button"]');
-        if (item) { clearInterval(t); item.click(); busy = false; }
-        else if (++tries > 40) { clearInterval(t); busy = false; }
-      }, 25);
+        if (item) { done(); item.click(); }
+      };
+      mo = new MutationObserver(look);
+      mo.observe(document, { childList: true, subtree: true });
+      giveUp = setTimeout(done, 1000);
+      look();
     };
     document.addEventListener('pointerdown', onMore, true);
     document.addEventListener('click', onMore, true);
@@ -112,6 +120,7 @@ guard.watchUpdate(log);
 
 let nextId = 1;
 const sessions = new Set();
+const trusted = new Set(); // 'sessionId:contextId' of the main worlds that may call the figmaTweaksAction binding
 const pending = new Map(); // request id -> callback(result)
 function send(method, params = {}, sessionId, cb) {
   const msg = { id: nextId++, method, params };
@@ -153,7 +162,12 @@ function showUpdateButton() {
     send('Runtime.evaluate', { expression: `window.__figmaTweaksShowUpdate && window.__figmaTweaksShowUpdate(${JSON.stringify(updatedVersion)})` }, sid);
   }
 }
-require('./update')(log, (version) => { updatedVersion = version; updateButtonShown = false; showUpdateButton(); });
+require('./update')(log, (version) => {
+  updatedVersion = version; updateButtonShown = false; showUpdateButton();
+  // A page that loads later (tab bar reopened) gets the version from its stored on-new-document script.
+  const css = readCss();
+  for (const sid of sessions) setNewDocScript(sid, scriptFor(css));
+});
 
 // A click on the update button: close Figma gracefully, wait until it is gone, start it via the Start menu shortcut.
 function restartFigma() {
@@ -205,10 +219,21 @@ fromFigma.on('data', (chunk) => {
       const sid = msg.params.sessionId;
       sessions.add(sid);
       inject(sid);
-    } else if ((msg.method === 'Page.domContentEventFired' || msg.method === 'Page.frameNavigated') && msg.sessionId) {
-      // Backup for pages where the on-new-document script did not run.
-      send('Runtime.evaluate', { expression: scriptFor(readCss()) }, msg.sessionId);
-    } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction') {
+    } else if ((msg.method === 'Page.domContentEventFired' || (msg.method === 'Page.frameNavigated' && !msg.params.frame.parentId)) && msg.sessionId) {
+      // Backup for pages where the on-new-document script did not run: inject only when the page has no tweaks yet (subframes are skipped).
+      const sid = msg.sessionId;
+      send('Runtime.evaluate', { expression: 'typeof window.__figmaTweaks', returnByValue: true }, sid, (r) => {
+        if (r && r.result && r.result.value !== 'function') send('Runtime.evaluate', { expression: scriptFor(readCss()) }, sid);
+      });
+    } else if (msg.method === 'Runtime.executionContextCreated' && msg.sessionId) {
+      // Only the main world of a Figma page (figma.com or the file: shell) may use the binding, not plugin or embedded frames.
+      const c = msg.params.context;
+      if (c.auxData && c.auxData.isDefault && /^(https:\/\/([^/]+\.)?figma\.com|file:\/\/)$/.test(c.origin)) trusted.add(msg.sessionId + ':' + c.id);
+    } else if (msg.method === 'Runtime.executionContextDestroyed' && msg.sessionId) {
+      trusted.delete(msg.sessionId + ':' + msg.params.executionContextId);
+    } else if (msg.method === 'Runtime.executionContextsCleared' && msg.sessionId) {
+      for (const k of trusted) if (k.startsWith(msg.sessionId + ':')) trusted.delete(k);
+    } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === 'figmaTweaksAction' && trusted.has(msg.sessionId + ':' + msg.params.executionContextId)) {
       const payload = String(msg.params.payload);
       if (payload === 'update-shown') { if (!updateButtonShown) { updateButtonShown = true; log('update button shown'); } }
       else if (payload === 'restart') { log('restart requested'); try { restartFigma(); } catch (e) { log('restart error', e.message); } }

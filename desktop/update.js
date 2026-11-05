@@ -28,8 +28,8 @@ function run(cmd, args, opts = {}) {
   });
 }
 
-// "v.1.4" -> { major: 1, minor: '4' }. Anything else is not a release tag. The minor part is a decimal fraction
-// written without trailing zeros, so v.1.4 means 1.40, it is newer than v.1.36 and older than v.1.41.
+// "v.1.40" -> { major: 1, minor: '40' }. Anything else is not a release tag. The minor part is a decimal fraction,
+// so v.1.4 (the old spelling an existing .version file may still hold) equals v.1.40, newer than v.1.36 and older than v.1.41.
 function parseTag(name) {
   const m = /^v\.(\d+)\.(\d+)$/.exec(name);
   return m ? { major: Number(m[1]), minor: m[2] } : null;
@@ -78,20 +78,30 @@ async function updateGit(log) {
   await run('git', ['fetch', '--force', `https://github.com/${REPO}.git`, '+refs/tags/*:refs/tags/*'], { cwd: ROOT, env });
   const tags = (await run('git', ['tag', '--list', 'v.*'], { cwd: ROOT })).split(/\r?\n/).filter(parseTag);
   if (!tags.length) { log('update git: no release tags'); return null; }
-  const tag = tags.sort(newerTag).pop();
-  const raw = await run('git', ['cat-file', 'tag', `refs/tags/${tag}`], { cwd: ROOT });
-  const f = payloadFields(raw);
-  if (f.tag !== tag || f.type !== 'commit') throw new Error(`tag ${tag}: not an annotated tag of a commit`);
-  try {
-    await run('git', ['-c', `gpg.ssh.allowedSignersFile=${SIGNERS}`, 'verify-tag', `refs/tags/${tag}`], { cwd: ROOT, env });
-  } catch (e) {
-    throw new Error(`tag ${tag}: signature rejected (${e.message})`);
+  // The newest tag that passes verification wins. A local or unsigned higher tag must not block the signed releases.
+  let tag = null, f = null, failure = null;
+  for (const t of tags.sort(newerTag).reverse()) {
+    try {
+      const raw = await run('git', ['cat-file', 'tag', `refs/tags/${t}`], { cwd: ROOT });
+      const fields = payloadFields(raw);
+      if (fields.tag !== t || fields.type !== 'commit') throw new Error(`tag ${t}: not an annotated tag of a commit`);
+      await run('git', ['-c', `gpg.ssh.allowedSignersFile=${SIGNERS}`, 'verify-tag', `refs/tags/${t}`], { cwd: ROOT, env });
+      tag = t; f = fields; break;
+    } catch (e) { failure = new Error(`tag ${t}: signature rejected (${e.message})`); log('update git:', failure.message); }
   }
+  if (!tag) throw failure;
   await run('git', ['merge', '--ff-only', f.object], { cwd: ROOT, env });
   const after = await run('git', ['rev-parse', 'HEAD'], { cwd: ROOT });
   if (before === after) { log('update git: up to date'); return null; }
   log('update git: updated to', tag);
   return tag;
+}
+
+// The tooltips folder is read as a whole (every .js in it runs), so a part the release removed or renamed must not stay.
+function dropStale(newDir, oldDir) {
+  if (!fs.existsSync(newDir)) return;
+  const keep = new Set(fs.readdirSync(newDir));
+  for (const f of fs.readdirSync(oldDir)) if (!keep.has(f)) fs.rmSync(path.join(oldDir, f), { recursive: true, force: true });
 }
 
 async function updateZip(log) {
@@ -128,9 +138,10 @@ async function updateZip(log) {
     const dl = await fetch(`https://github.com/${REPO}/archive/${commit}.zip`, { signal: AbortSignal.timeout(60000) });
     if (!dl.ok) throw new Error(`download ${dl.status}`);
     fs.writeFileSync(zip, Buffer.from(await dl.arrayBuffer()));
-    await run('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${tmp}' -Force`]);
+    await run('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip.replace(/'/g, "''")}' -DestinationPath '${tmp.replace(/'/g, "''")}' -Force`]);
     const src = path.join(tmp, fs.readdirSync(tmp).find((d) => fs.statSync(path.join(tmp, d)).isDirectory()));
     fs.cpSync(src, ROOT, { recursive: true, force: true });
+    dropStale(path.join(src, 'tooltips'), path.join(ROOT, 'tooltips'));
     fs.writeFileSync(VERSION_FILE, record);
     log('update zip: updated to', latest.tag);
     return latest.tag;
@@ -145,3 +156,6 @@ module.exports = function update(log, onUpdated) {
 };
 module.exports.verifyPayload = verifyPayload;
 module.exports.newerTag = newerTag;
+module.exports.parseTag = parseTag;
+module.exports.payloadFields = payloadFields;
+module.exports.dropStale = dropStale;

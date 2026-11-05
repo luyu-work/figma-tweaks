@@ -7,9 +7,9 @@
   var notified = false;
 
   var place = function () {
+    if (document.getElementById('figma-tweaks-update')) return true;
     var bar = document.querySelector('.tabContainer');
     if (!bar) return false;
-    if (document.getElementById('figma-tweaks-update')) return true;
 
     var wrap = document.createElement('div');
     wrap.id = 'figma-tweaks-update';

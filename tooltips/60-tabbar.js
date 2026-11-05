@@ -1,11 +1,15 @@
 // Tab bar shell (file: page). The bottom line of the bar is a translucent white border, over a dark page it vanishes, so it is made solid.
-// The first run may come before the document has a head (the new-document script), then the style is added by the run after DOMContentLoaded, never to the document itself, that would make it the root element and blank the page.
+// The first run may come before the document has a head (the new-document script), then the style is added on DOMContentLoaded, never to the document itself, that would make it the root element and blank the page.
 // The tab group fill is 38px high and stops short of that border, so it is stretched over it.
 // The Home tab is narrowed to the width of the left rail of the editor. That width depends on the screen, so the
 // editor page measures it (in physical pixels) and reports it through the launcher, see the rail part below.
 if (location.protocol === 'file:') {
   var tabbarStyle = document.getElementById('figma-tweaks-tabbar');
-  if (!tabbarStyle) { tabbarStyle = document.createElement('style'); tabbarStyle.id = 'figma-tweaks-tabbar'; if (document.head) document.head.appendChild(tabbarStyle); }
+  if (!tabbarStyle) { tabbarStyle = document.createElement('style'); tabbarStyle.id = 'figma-tweaks-tabbar'; }
+  // Without a head yet (the new-document script runs first) the style is mounted when the document is parsed, by that event, not by a re-run of the script.
+  var mountTabbar = function () { if (!tabbarStyle.isConnected && document.head) document.head.appendChild(tabbarStyle); };
+  mountTabbar();
+  if (!tabbarStyle.isConnected) document.addEventListener('DOMContentLoaded', mountTabbar, { once: true });
   var applyRail = function () {
     // Physical pixels of the rail to CSS pixels of this page, 44 until the editor reported.
     var w = window.__figmaTweaksRailPx > 0 ? window.__figmaTweaksRailPx / devicePixelRatio : 44;
@@ -17,25 +21,17 @@ if (location.protocol === 'file:') {
       '[class*="tab_bar--container"]{border-bottom-color:#414141 !important}' +
       '[class*="group_overlay--groupOverlay--"]{height:calc(100% + 0.8px) !important}' +
       '[class*="tab--fileBrowserTab"]{width:' + w + 'px !important;min-width:0 !important;flex:0 0 ' + w + 'px !important;margin-left:' + inset + 'px !important;padding:0 !important;justify-content:center !important' +
-      // Smooth resize, but not for the first measurement at start (44 to the real width).
-      (railSmooth ? ';transition:width .25s ease,flex-basis .25s ease,margin-left .25s ease !important' : '') + '}';
+      '}';
   };
-  var railSmooth = false;
   // Figma places the tab group fill from tab positions it measured itself. A width changed only by CSS leaves the fill
-  // where it was (a gap or an overlap after the Home tab shrinks), so Figma is made to measure again, at once and when the animation ends.
-  var railNudges = [];
-  var nudgeTabLayout = function () {
-    railNudges.forEach(clearTimeout);
-    railNudges = [0, 320].map(function (ms) { return setTimeout(function () { window.dispatchEvent(new Event('resize')); }, ms); });
-  };
+  // where it was (a gap or an overlap after the Home tab changes), so Figma is made to measure again right away, with the new width already in layout.
+  var measureTabs = function () { window.dispatchEvent(new Event('resize')); };
   window.__figmaTweaksRail = function (px, page) {
     window.__figmaTweaksRailPx = px; window.__figmaTweaksPagePx = page; applyRail();
-    if (!railSmooth) setTimeout(function () { railSmooth = true; applyRail(); }, 100);
-    nudgeTabLayout();
+    measureTabs();
+    requestAnimationFrame(measureTabs);
   };
   applyRail();
-  // Width already known (live reload, tab bar page reopened): animate from the next change on.
-  if (window.__figmaTweaksRailPx > 0) setTimeout(function () { railSmooth = true; applyRail(); }, 100);
 } else if (/(^|\.)figma\.com$/.test(location.hostname) && window.figmaTweaksAction) {
   // Editor page: report the width of the left rail whenever it changes. A ResizeObserver on the rail covers every cause
   // (Additional labels on and off, the rail settling after the file opened, window zoom), and a changed width is reported
