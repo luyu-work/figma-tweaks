@@ -31,6 +31,7 @@
     hide();
     clearTimeout(state.preloadTimer);
     if (state.railOff) state.railOff();
+    if (state.strokeOff) state.strokeOff();
     watcher.disconnect();
     document.removeEventListener('pointerover', onOver, true);
     document.removeEventListener('mousedown', hide, true);

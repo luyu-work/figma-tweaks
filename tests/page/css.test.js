@@ -118,13 +118,26 @@ test('the team menu gets spacing, the account menu keeps its layout', { skip }, 
   assert.notEqual(result[1].gap, 'flex');
 });
 
-test('the text style tag keeps its gap from the name', { skip }, async () => {
+// Figma draws the gap between the style name and "· 20/130" itself now (flex column-gap 4px in the chip, 2.75px
+// padding on the tail in the picker row), the leading space of the tail is collapsed. Our old 3px padding doubled it.
+test('the text style tag keeps the gap Figma draws, no extra padding', { skip }, async () => {
   const result = await runPage({
-    ...styled(),
-    body: '<div role="rowheader" data-tooltip-style-name="x"><span>a</span><span id="tail">b</span></div><span class="style_title--styleTag--z" id="tag"></span>',
-    test: async () => [document.getElementById('tail'), document.getElementById('tag')].map((e) => getComputedStyle(e).paddingLeft),
+    ...styled('.chip{display:flex;column-gap:4px;white-space:nowrap;font:11px Arial}.chip .tag{display:block}.row .tail{padding:0 2.75px;white-space:nowrap}'),
+    body: `<span class="chip style_title--chipTitleContent--q"><span id="name">h1</span><span class="style_title--styleTag--z tag" id="tag"> · 96/110</span></span>
+      <div class="row" role="rowheader" data-tooltip-style-name="x"><button>h1</button><div class="tail" id="tail"> · 96/110</div></div>`,
+    test: async () => ({
+      gap: (() => {
+        const text = document.getElementById('tag').firstChild, range = document.createRange();
+        range.setStart(text, 1); range.setEnd(text, 2);
+        return Math.round((range.getBoundingClientRect().left - document.getElementById('name').getBoundingClientRect().right) * 100) / 100;
+      })(),
+      tag: getComputedStyle(document.getElementById('tag')).paddingLeft,
+      tail: getComputedStyle(document.getElementById('tail')).paddingLeft,
+    }),
   });
-  assert.deepEqual(result, ['3px', '3px']);
+  assert.equal(result.gap, 4);
+  assert.equal(result.tag, '0px');
+  assert.equal(result.tail, '2.75px');
 });
 
 const pageRow = {

@@ -129,6 +129,14 @@ test('the git updater takes the newest tag that verifies', () => {
   assert.match(code, /--ff-only/);
 });
 
+test('the stroke weight steps are removed on dispose and bound to the stroke weight test id', () => {
+  assert.match(read('tooltips', '50-events.js'), /if \(state\.strokeOff\) state\.strokeOff\(\);/);
+  const code = read('tooltips', '70-stroke-step.js');
+  assert.match(code, /input\[data-testid="stroke-weight"\]/);
+  assert.match(code, /state\.strokeOff = /);
+  assert.doesNotMatch(code, /setInterval|setTimeout/);
+});
+
 test('the tab bar style is mounted on DOMContentLoaded when the head is missing', () => {
   assert.match(read('tooltips', '60-tabbar.js'), /addEventListener\('DOMContentLoaded', mountTabbar/);
 });

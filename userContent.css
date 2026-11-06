@@ -168,12 +168,6 @@
     box-shadow: 0 5px 12px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5) !important;
   }
 
-  /* Text styles picker: Figma drops the space before "· 18/24" (leading space of a flex item), the dot sticks to the name. Same gap on both sides */
-  [role="rowheader"][data-tooltip-style-name] > span:last-child,
-  [class*="style_title--styleTag"] {
-    padding-left: 3px !important;
-  }
-
   /* Page background row: the divider before the opacity field is a 1px box that lands on two device pixels at fractional scale and looks thick. A border snaps to one device pixel. */
   [class*="background_panel--colorValueContainer"] [class*="paint_panels--opacityInputContainer"]::before {
     width: 0 !important;
