@@ -69,6 +69,54 @@ test('every colour notation becomes HEX and a percentage', { skip }, async () =>
   assert.deepEqual(result, [['#0080FF · 50%'], ['#FF0000 · 25%'], ['#123456 · 100%'], ['#ABCDEF · 100%'], ['#FFFFFF · 7%']]);
 });
 
+test('a translucent variable reads its opacity from the checkerboard half laid over the swatch', { skip }, async () => {
+  const result = await runPage(figma({
+    body: row(swatch('rgb(255, 255, 255)')),
+    test: async () => {
+      const out = [];
+      for (const percent of [100, 80, 40, 12, 4]) {
+        const fade = 1 - percent / 100;
+        const r = document.getElementById('row');
+        r.innerHTML = `<i id="s" style="display:inline-block;position:relative;width:16px;height:16px;background:rgb(255, 255, 255)"><b style="position:absolute;right:0;width:8px;height:16px;background-image:linear-gradient(#999, #999);opacity:${fade}"></b></i>`;
+        fiber(r, { variable: { name: 'x', description: '' } });
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await hover(document.getElementById('s'));
+        out.push(tip());
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await sleep(30);
+        r.innerHTML = '';
+        await hover(document.body, 30);
+      }
+      return out;
+    },
+  }));
+  assert.deepEqual(result, [100, 80, 40, 12, 4].map((n) => [`#FFFFFF · ${n}%`]));
+});
+
+test('any opacity of a library colour is shown with at most one decimal', { skip }, async () => {
+  const result = await runPage(figma({
+    body: row(swatch('rgb(82, 21, 33)')),
+    test: async () => {
+      const percents = [0.1, 0.5, 1, 1.5, 3, 7.3, 13, 17.1, 22.2, 29.9, 33.3, 49.5, 50, 61.8, 62.7, 75.5, 87.5, 90.1, 99, 99.9, 100];
+      const out = [];
+      for (const percent of percents) {
+        const r = document.getElementById('row');
+        r.innerHTML = `<i id="s" style="display:inline-block;position:relative;width:16px;height:16px;background:rgb(82, 21, 33)"><b style="position:absolute;right:0;width:8px;height:16px;background-image:linear-gradient(#999, #999);opacity:${1 - percent / 100}"></b></i>`;
+        fiber(r, { variable: { name: 'x', description: '' } });
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await hover(document.getElementById('s'));
+        out.push(tip()[0]);
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await sleep(30);
+        r.innerHTML = '';
+        await hover(document.body, 30);
+      }
+      return { out, percents };
+    },
+  }));
+  assert.deepEqual(result.out, result.percents.map((n) => `#521521 · ${n}%`));
+});
+
 test('a row with only a colour shows the colour line alone', { skip }, async () => {
   const result = await runPage(figma({
     body: row(swatch('rgb(1, 2, 3)')),

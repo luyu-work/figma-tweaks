@@ -11,12 +11,14 @@ if (location.protocol === 'file:') {
   mountTabbar();
   if (!tabbarStyle.isConnected) document.addEventListener('DOMContentLoaded', mountTabbar, { once: true });
   var applyRail = function () {
-    // Physical pixels of the rail to CSS pixels of this page, 44 until the editor reported.
-    var w = window.__figmaTweaksRailPx > 0 ? window.__figmaTweaksRailPx / devicePixelRatio : 44;
-    // The editor page sits inside the window frame, it is narrower than this page by a pixel or two on each side.
+    // The editor view sits in the window on whole device pixels and snaps the rail to them, so the Home tab is sized in whole device
+    // pixels too (a fractional edge would round the other way and leave the tab a pixel wider than the rail). 44 CSS pixels until the editor reported.
+    var dpr = devicePixelRatio;
+    var rail = window.__figmaTweaksRailPx > 0 ? Math.round(window.__figmaTweaksRailPx) : Math.round(44 * dpr);
+    // The editor page sits inside the window frame, it is narrower than this page by a device pixel or two on each side.
     // The rail starts that far from the left, the Home tab starts there too, the frame line stays visible to its left.
-    var inset = window.__figmaTweaksPagePx > 0 ? Math.max(0, (innerWidth - window.__figmaTweaksPagePx / devicePixelRatio) / 2) : 0.8;
-    w = Math.round(w * 100) / 100; inset = Math.round(inset * 100) / 100;
+    var inset = window.__figmaTweaksPagePx > 0 ? Math.max(0, Math.round((innerWidth * dpr - Math.round(window.__figmaTweaksPagePx)) / 2)) : 1;
+    var w = Math.round(rail / dpr * 1000) / 1000; inset = Math.round(inset / dpr * 1000) / 1000;
     tabbarStyle.textContent =
       '[class*="tab_bar--container"]{border-bottom-color:#414141 !important}' +
       '[class*="group_overlay--groupOverlay--"]{height:calc(100% + 0.8px) !important}' +

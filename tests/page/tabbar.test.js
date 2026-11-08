@@ -68,22 +68,38 @@ test('the Home tab takes the rail width and inset reported by the editor', { ski
     ...shell,
     scripts: [tabbar],
     test: async () => {
-      window.__figmaTweaksRail(68.9, (innerWidth - 2.4) * devicePixelRatio);
+      window.__figmaTweaksRail(61.25, innerWidth * devicePixelRatio - 2);
       const s = getComputedStyle(document.getElementById('home'));
       return { width: s.width, marginLeft: s.marginLeft, flexBasis: s.flexBasis };
     },
   });
-  assert.ok(Math.abs(parseFloat(result.width) - 55.12) < 0.02, result.width);
-  assert.equal(result.marginLeft, '1.2px');
-  assert.ok(Math.abs(parseFloat(result.flexBasis) - 55.12) < 0.02, result.flexBasis);
+  assert.deepEqual(result, { width: '48.8px', marginLeft: '0.8px', flexBasis: '48.8px' });
 });
+
+for (const scale of [1, 1.25, 1.5, 2]) {
+  test(`the Home tab edges land on whole device pixels at scale ${scale}`, { skip }, async () => {
+    const result = await runPage({
+      ...shell,
+      scale,
+      scripts: [tabbar],
+      test: async () => {
+        window.__figmaTweaksRail(49 * devicePixelRatio, innerWidth * devicePixelRatio - 2);
+        const b = document.getElementById('home').getBoundingClientRect();
+        return { left: b.left * devicePixelRatio, right: b.right * devicePixelRatio, rail: Math.round(49 * devicePixelRatio) };
+      },
+    });
+    assert.ok(Math.abs(result.left - Math.round(result.left)) < 0.1, `left ${result.left}`);
+    assert.ok(Math.abs(result.right - Math.round(result.right)) < 0.1, `right ${result.right}`);
+    assert.equal(Math.round(result.right) - Math.round(result.left), result.rail);
+  });
+}
 
 test('the Home tab changes width at once, so the group fill can follow it', { skip }, async () => {
   const result = await runPage({
     ...shell,
     scripts: [tabbar],
     test: async () => {
-      window.__figmaTweaksRail(68.9, 1000);
+      window.__figmaTweaksRail(68.75, 1000);
       const first = getComputedStyle(document.getElementById('home'));
       const transition = first.transitionDuration;
       window.__figmaTweaksRail(80, 1000);
@@ -97,10 +113,10 @@ test('the Home tab changes width at once, so the group fill can follow it', { sk
 test('a width known before the page loaded is applied from the start', { skip }, async () => {
   const result = await runPage({
     ...shell,
-    scripts: ['window.__figmaTweaksRailPx = 68.9; window.__figmaTweaksPagePx = 1000;', tabbar],
+    scripts: ['window.__figmaTweaksRailPx = 68.75; window.__figmaTweaksPagePx = 1000;', tabbar],
     test: async () => parseFloat(getComputedStyle(document.getElementById('home')).width),
   });
-  assert.ok(Math.abs(result - 55.12) < 0.02, String(result));
+  assert.ok(Math.abs(result - 55.2) < 0.02, String(result));
 });
 
 test('Figma measures the tabs again at once, with the new width already in layout', { skip }, async () => {
@@ -110,14 +126,14 @@ test('Figma measures the tabs again at once, with the new width already in layou
     test: async () => {
       const seen = [];
       window.addEventListener('resize', () => seen.push(parseFloat(getComputedStyle(document.getElementById('home')).width)));
-      window.__figmaTweaksRail(68.9, 1000);
+      window.__figmaTweaksRail(68.75, 1000);
       const sync = seen.length;
       await sleep(100);
       return { sync, widths: seen };
     },
   });
   assert.equal(result.sync, 1);
-  assert.ok(result.widths.every((w) => Math.abs(w - 55.12) < 0.02), result.widths.join());
+  assert.ok(result.widths.every((w) => Math.abs(w - 55.2) < 0.02), result.widths.join());
   assert.ok(result.widths.length >= 2);
 });
 

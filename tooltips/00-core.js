@@ -22,6 +22,16 @@
     return null;
   }
 
+  // A translucent variable keeps the opaque color on the swatch and lays a checkerboard half over it, faded by the opposite of the alpha.
+  function alphaOf(swatch) {
+    var kids = swatch.querySelectorAll('*');
+    for (var i = 0; i < kids.length; i++) {
+      var cs = getComputedStyle(kids[i]);
+      if (cs.backgroundImage !== 'none') return Math.min(1, Math.max(0, 1 - parseFloat(cs.opacity)));
+    }
+    return 1;
+  }
+
   // The color swatch: first 8-24px box in the row with a visible background.
   function swatchOf(row) {
     var all = row.querySelectorAll('*');
@@ -36,7 +46,7 @@
       if (m[1] === 'color') p = p.map(function (n) { return n * 255; });
       var a = halves[1] !== undefined ? parseFloat(halves[1]) / (halves[1].indexOf('%') >= 0 ? 100 : 1) : (p.length > 3 ? p.pop() : 1);
       if (p.length < 3 || a === 0) continue;
-      return { el: all[i], p: p, a: a };
+      return { el: all[i], p: p, a: a === 1 ? alphaOf(all[i]) : a };
     }
     return null;
   }
@@ -45,7 +55,8 @@
     var sw = swatchOf(row);
     if (!sw) return null;
     var hex = '#' + sw.p.slice(0, 3).map(function (n) { return ('0' + Math.round(n).toString(16)).slice(-2); }).join('').toUpperCase();
-    return hex + ' · ' + Math.round(sw.a * 100) + '%';
+    // One decimal at most, and only when there is one: 13%, 17.1%.
+    return hex + ' · ' + Math.round(sw.a * 1000) / 10 + '%';
   }
 
   // ---- Text styles ----
