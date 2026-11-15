@@ -58,9 +58,9 @@ test('the bottom line is solid and the group fill covers it', { skip }, async ()
   assert.deepEqual(result, { line: 'rgb(65, 65, 65)', fill: '38.8px' });
 });
 
-test('the Home tab is 44 wide with a small inset until the editor reports', { skip }, async () => {
+test('the Home tab takes the default rail width on whole device pixels with a small inset until the editor reports', { skip }, async () => {
   const result = await runPage({ ...shell, scripts: [tabbar], test: eval(homeStyle) });
-  assert.deepEqual(result, { width: '44px', marginLeft: '0.8px', minWidth: '0px', flexBasis: '44px', flexGrow: '0', padding: '0px', justify: 'center', transition: 'all' });
+  assert.deepEqual(result, { width: '48.8px', marginLeft: '0.8px', minWidth: '0px', flexBasis: '48.8px', flexGrow: '0', padding: '0px', justify: 'center', transition: 'all' });
 });
 
 test('the Home tab takes the rail width and inset reported by the editor', { skip }, async () => {
@@ -93,6 +93,43 @@ for (const scale of [1, 1.25, 1.5, 2]) {
     assert.equal(Math.round(result.right) - Math.round(result.left), result.rail);
   });
 }
+
+test('the reported width is kept for the next start', { skip }, async () => {
+  const result = await runPage({
+    ...shell,
+    scripts: ['localStorage.removeItem("figmaTweaks.rail");', tabbar],
+    test: async () => {
+      window.__figmaTweaksRail(61.25, innerWidth * devicePixelRatio - 2);
+      return JSON.parse(localStorage.getItem('figmaTweaks.rail'));
+    },
+  });
+  assert.deepEqual(result, { px: 61.25, inset: 1, dpr: 1.25 });
+});
+
+test('a start without an editor takes the kept width, whatever the window size', { skip }, async () => {
+  const saved = JSON.stringify({ px: 80, inset: 1, dpr: 1.25 });
+  const result = await runPage({
+    ...shell,
+    scripts: [`localStorage.setItem("figmaTweaks.rail", ${JSON.stringify(saved)});`, tabbar],
+    test: async () => {
+      const s = getComputedStyle(document.getElementById('home'));
+      return { width: s.width, marginLeft: s.marginLeft };
+    },
+  });
+  assert.deepEqual(result, { width: '64px', marginLeft: '0.8px' });
+});
+
+test('a kept width of another pixel ratio or a broken record is ignored', { skip }, async () => {
+  const widths = [];
+  for (const value of [JSON.stringify({ px: 80, inset: 1, dpr: 2 }), '{broken', JSON.stringify({ px: -5, inset: 1, dpr: 1.25 })]) {
+    widths.push(await runPage({
+      ...shell,
+      scripts: [`localStorage.setItem("figmaTweaks.rail", ${JSON.stringify(value)});`, tabbar],
+      test: async () => getComputedStyle(document.getElementById('home')).width,
+    }));
+  }
+  assert.deepEqual(widths, ['48.8px', '48.8px', '48.8px']);
+});
 
 test('the Home tab changes width at once, so the group fill can follow it', { skip }, async () => {
   const result = await runPage({

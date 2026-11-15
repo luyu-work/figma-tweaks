@@ -10,14 +10,24 @@ if (location.protocol === 'file:') {
   var mountTabbar = function () { if (!tabbarStyle.isConnected && document.head) document.head.appendChild(tabbarStyle); };
   mountTabbar();
   if (!tabbarStyle.isConnected) document.addEventListener('DOMContentLoaded', mountTabbar, { once: true });
+  // The last reported width is kept, so a start on a page without an editor (the file browser, a new tab) already has the right Home tab and
+  // does not wait for an editor to be shown. Only for the same pixel ratio, the width in device pixels depends on it.
+  var railKey = 'figmaTweaks.rail';
+  var insetOf = function (page) { return Math.max(0, Math.round((innerWidth * devicePixelRatio - Math.round(page)) / 2)); };
+  if (!(window.__figmaTweaksRailPx > 0)) {
+    try {
+      var saved = JSON.parse(localStorage.getItem(railKey));
+      if (saved && saved.dpr === devicePixelRatio && saved.px > 0) { window.__figmaTweaksRailPx = saved.px; window.__figmaTweaksPagePx = innerWidth * devicePixelRatio - 2 * saved.inset; }
+    } catch (e) {}
+  }
   var applyRail = function () {
     // The editor view sits in the window on whole device pixels and snaps the rail to them, so the Home tab is sized in whole device
-    // pixels too (a fractional edge would round the other way and leave the tab a pixel wider than the rail). 44 CSS pixels until the editor reported.
+    // pixels too (a fractional edge would round the other way and leave the tab a pixel wider than the rail). 49 CSS pixels (the rail of the current Figma) when nothing is known yet.
     var dpr = devicePixelRatio;
-    var rail = window.__figmaTweaksRailPx > 0 ? Math.round(window.__figmaTweaksRailPx) : Math.round(44 * dpr);
+    var rail = window.__figmaTweaksRailPx > 0 ? Math.round(window.__figmaTweaksRailPx) : Math.round(49 * dpr);
     // The editor page sits inside the window frame, it is narrower than this page by a device pixel or two on each side.
     // The rail starts that far from the left, the Home tab starts there too, the frame line stays visible to its left.
-    var inset = window.__figmaTweaksPagePx > 0 ? Math.max(0, Math.round((innerWidth * dpr - Math.round(window.__figmaTweaksPagePx)) / 2)) : 1;
+    var inset = window.__figmaTweaksPagePx > 0 ? insetOf(window.__figmaTweaksPagePx) : 1;
     var w = Math.round(rail / dpr * 1000) / 1000; inset = Math.round(inset / dpr * 1000) / 1000;
     tabbarStyle.textContent =
       '[class*="tab_bar--container"]{border-bottom-color:#414141 !important}' +
@@ -30,6 +40,7 @@ if (location.protocol === 'file:') {
   var measureTabs = function () { window.dispatchEvent(new Event('resize')); };
   window.__figmaTweaksRail = function (px, page) {
     window.__figmaTweaksRailPx = px; window.__figmaTweaksPagePx = page; applyRail();
+    try { localStorage.setItem(railKey, JSON.stringify({ px: px, inset: insetOf(page), dpr: devicePixelRatio })); } catch (e) {}
     measureTabs();
     requestAnimationFrame(measureTabs);
   };

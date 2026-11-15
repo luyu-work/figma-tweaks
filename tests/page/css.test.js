@@ -93,14 +93,19 @@ test('the invisible import menu is not clickable', { skip }, async () => {
 test('new file tab aligns its header and spaces the team avatar', { skip }, async () => {
   const result = await runPage({
     ...styled(),
-    body: '<div class="desktop_new_tab_view--folderHeader--a"><div class="desktop_new_tab_view--content--b" id="content"></div></div><span class="desktop_new_tab_folder_dropdown--teamAvatar--c" id="avatar"></span>',
+    body: '<div class="desktop_new_tab_view--folderHeader--a"><div class="desktop_new_tab_view--content--b" id="content"><button class="button__ghost"><span class="button__buttonContent__x"><div id="row" style="display:flex"><div id="avatar" style="width:16px;height:16px"></div>IE / Learning<svg width="16" height="16"></svg></div></span></button></div></div>',
     test: async () => ({
       display: getComputedStyle(document.getElementById('content')).display,
       align: getComputedStyle(document.getElementById('content')).alignItems,
       gap: getComputedStyle(document.getElementById('avatar')).marginRight,
+      space: (() => {
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById('row').childNodes[1]);
+        return Math.round(range.getBoundingClientRect().left - document.getElementById('avatar').getBoundingClientRect().right);
+      })(),
     }),
   });
-  assert.deepEqual(result, { display: 'flex', align: 'center', gap: '4px' });
+assert.deepEqual(result, { display: 'flex', align: 'center', gap: '4px', space: 4 });
 });
 
 test('the team menu gets spacing, the account menu keeps its layout', { skip }, async () => {

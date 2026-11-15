@@ -90,7 +90,7 @@
     display: flex !important;
     align-items: center !important;
   }
-  [class*="desktop_new_tab_folder_dropdown--teamAvatar"] {
+  [class*="desktop_new_tab_view--folderHeader"] [class*="button__buttonContent"] > div > :first-child {
     margin-right: var(--tw-team-avatar-gap) !important;
   }
 

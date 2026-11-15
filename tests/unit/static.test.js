@@ -81,7 +81,7 @@ test('selectors never depend on generated class hashes', () => {
 test('class matches use the stable name prefix before the hash', () => {
   const matches = [...userCss().matchAll(/\[class\*="([^"]+)"\]/g)].map((m) => m[1]);
   assert.ok(matches.length > 0);
-  for (const m of matches) assert.match(m, /^[a-z_]+--/, m);
+  for (const m of matches) assert.match(m, /^[a-z_]+(--|__)/, m);
 });
 
 test('the switch thumb rule targets the structure of the switch', () => {
